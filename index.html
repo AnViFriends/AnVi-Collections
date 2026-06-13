@@ -112,9 +112,9 @@ async function addItem(){
   setStatus('Uploading...');
   try{
     const fileName = Date.now()+'_'+file.name.replace(/\s+/g,'_');
-    const { error: upErr } = await sb.storage.from('earrings').upload(fileName, file);
+    const { error: upErr } = await sb.storage.from('Earrings').upload(fileName, file);
     if(upErr) throw upErr;
-    const { data: urlData } = sb.storage.from('earrings').getPublicUrl(fileName);
+    const { data: urlData } = sb.storage.from('Earrings').getPublicUrl(fileName);
     const { error: dbErr } = await sb.from('items').insert({
       name, price, category: cat, img: urlData.publicUrl, path: fileName
     });
@@ -133,7 +133,7 @@ async function deleteItem(id, path){
   if(!confirm('Delete this item?'))return;
   try{
     await sb.from('items').delete().eq('id', id);
-    if(path){ await sb.storage.from('earrings').remove([path]); }
+    if(path){ await sb.storage.from('Earrings').remove([path]); }
     await loadItems();
   }catch(e){alert('Error: '+e.message)}
 }
