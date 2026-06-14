@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AnVi Collections</title>
+<style>
+:root{--navy:#0f0f23;--navy2:#1a1a35;--card:#16162a;--border:rgba(255,255,255,.08);
+--accent:#c9788d;--gold:#f5a623;--green:#27ae60;--danger:#e74c3c;--text:#e8e8f0;--muted:#8888aa}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Arial,sans-serif;background:#fdf6f0;color:#333}
+header{background:var(--accent);color:#fff;padding:25px;text-align:center;position:relative;background-size:cover;background-position:center}
+header::before{content:'';position:absolute;inset:0;background:rgba(201,120,141,.55)}
+header h1,header p,#adminLink{position:relative;z-index:1}
+header h1{margin:0;font-size:30px}
+header p{margin:5px 0 0;font-size:15px}
+#adminLink{position:absolute;top:10px;right:15px;font-size:12px;color:#fff;cursor:pointer;text-decoration:underline}
+.container{max-width:1100px;margin:20px auto;padding:0 15px}
+.tabs{display:flex;justify-content:center;gap:10px;margin-bottom:15px;flex-wrap:wrap}
+.tabs button{padding:8px 16px;border:1px solid var(--accent);background:#fff;color:var(--accent);border-radius:20px;cursor:pointer}
+.tabs button.active{background:var(--accent);color:#fff}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:15px}
+.card{background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 2px 6px rgba(0,0,0,.1);text-align:center}
+.card img{width:100%;height:180px;object-fit:cover;cursor:pointer}
+.card .info{padding:8px}
+.card .info b{display:block;font-size:15px}
+.card .info small{color:#777;display:block}
+.stock-badge{display:inline-block;margin-top:4px;padding:2px 8px;border-radius:10px;font-size:11px}
+.in{background:#e6f7ee;color:var(--green)}.low{background:#fff4e0;color:var(--gold)}.out{background:#fdeaea;color:var(--danger)}
+#lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:999;align-items:center;justify-content:center}
+#lightbox.show{display:flex}
+#lightbox img{max-width:90%;max-height:90%;border-radius:8px}
+#lightbox span{position:absolute;top:15px;right:25px;color:#fff;font-size:30px;cursor:pointer}
+footer{text-align:center;padding:15px;color:#999;font-size:13px}
+
+/* ADMIN PANEL */
+#adminPanel{display:none;background:var(--navy);color:var(--text);min-height:100vh}
+#adminPanel.show{display:block}
+.abar{display:flex;justify-content:space-between;align-items:center;padding:12px 20px;background:var(--card);border-bottom:1px solid var(--border)}
+.abar h2{font-size:18px}
+.atabs{display:flex;gap:8px;padding:12px 20px;flex-wrap:wrap;background:var(--navy2)}
+.atabs button{padding:7px 14px;border:1px solid var(--border);background:transparent;color:var(--muted);border-radius:6px;cursor:pointer;font-size:13px}
+.atabs button.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.apage{display:none;padding:18px 20px}
+.apage.active{display:block}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:18px}
+.kpi{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px}
+.kpi .l{font-size:11px;color:var(--muted);text-transform:uppercase}
+.kpi .v{font-size:20px;font-weight:700;margin-top:4px}
+table{width:100%;border-collapse:collapse;font-size:13px;background:var(--card);border-radius:8px;overflow:hidden}
+th,td{padding:8px 10px;border-bottom:1px solid var(--border);text-align:left}
+th{background:var(--navy2);font-size:11px;text-transform:uppercase;color:var(--muted)}
+.formrow{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center}
+input,select,button{padding:8px;border-radius:6px;border:1px solid #ccc;font-size:13px}
+.apage input,.apage select{background:var(--navy2);border:1px solid var(--border);color:var(--text)}
+.btn{background:var(--accent);color:#fff;border:none;cursor:pointer;padding:8px 14px;border-radius:6px}
+.btn.danger{background:var(--danger)}
+.btn.sm{padding:4px 10px;font-size:12px}
+.actions{display:flex;gap:6px;flex-wrap:nowrap;white-space:nowrap}
+th.sortable{cursor:pointer;user-select:none}
+th.sortable:hover{color:var(--accent)}
+#loginBox{display:none;gap:8px;justify-content:center;padding:14px;background:var(--card)}
+#loginBox.show{display:flex}
+.upi-box{background:#fff;border:1px solid #eee;border-radius:10px;padding:16px;text-align:center;max-width:280px;margin:20px auto}
+.upi-box img{margin:10px auto}
+</style>
+</head>
+<body>
+
+<!-- PUBLIC SITE -->
+<div id="publicSite">
+<header>
+  <span id="adminLink" onclick="toggleLogin()">Admin</span>
+  <h1>✨ AnVi Collections ✨</h1>
+  <p>Best Trendy & Traditional Vibe Handpicked Earrings for Kids & Ladies</p>
+</header>
+
+<div id="loginBox">
+  <input type="text" id="user" placeholder="Username">
+  <input type="password" id="pass" placeholder="Password">
+  <button class="btn" onclick="login()">Login</button>
+</div>
+
+<div class="container">
+  <div class="tabs">
+    <button class="active" onclick="filterCat('All',this)">All</button>
+    <button onclick="filterCat('Kids',this)">Kids</button>
+    <button onclick="filterCat('Ladies',this)">Ladies</button>
+  </div>
+  <div class="grid" id="grid"></div>
+
+  <div id="upiPublic"></div>
+</div>
+
+<footer>© 2026 AnVi Collections. All rights reserved.</footer>
+</div>
+
+<!-- LIGHTBOX -->
+<div id="lightbox" onclick="closeLightbox()">
+  <span onclick="closeLightbox()">&times;</span>
+  <img id="lightboxImg" src="" alt="">
+</div>
+
+<!-- ADMIN PANEL -->
+<div id="adminPanel">
+  <div class="abar">
+    <h2>AnVi Collections — Admin</h2>
+    <div>
+      <button class="btn sm" onclick="exitAdmin()">View Site</button>
+      <button class="btn sm danger" onclick="logout()">Logout</button>
+    </div>
+  </div>
+  <div class="atabs">
+    <button class="active" onclick="showAPage('dash',this)">Dashboard</button>
+    <button onclick="showAPage('inv',this)">Inventory</button>
+    <button onclick="showAPage('sales',this)">Sales</button>
+    <button onclick="showAPage('exp',this)">Expenses</button>
+    <button onclick="showAPage('upi',this)">UPI Settings</button>
+    <button onclick="showAPage('brand',this)">Branding</button>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div class="apage active" id="apage-dash">
+    <div class="kpis" id="kpis"></div>
+  </div>
+
+  <!-- INVENTORY -->
+  <div class="apage" id="apage-inv">
+    <div class="formrow">
+      <input type="text" id="pName" placeholder="Item name">
+      <input type="text" id="pSku" placeholder="SKU (optional)">
+      <select id="pCat"><option value="Kids">Kids</option><option value="Ladies">Ladies</option></select>
+      <input type="text" id="pVendor" placeholder="Vendor">
+      <input type="number" id="pStock" placeholder="Stock" style="width:80px">
+      <input type="number" id="pWholesale" placeholder="Wholesale ₹" style="width:100px">
+      <input type="number" id="pSelling" placeholder="Selling ₹" style="width:90px">
+      <input type="file" id="pImg" accept="image/*">
+      <button class="btn" id="pSubmitBtn" onclick="addProduct()">Add Product</button>
+      <button class="btn sm" id="pCancelBtn" onclick="cancelEditProduct()" style="display:none;background:#888">Cancel</button>
+      <span id="invStatus" style="font-size:12px;color:var(--muted)"></span>
+    </div>
+    <table><thead><tr><th>Img</th><th class="sortable" onclick="sortTable('products','sku')">SKU</th><th class="sortable" onclick="sortTable('products','name')">Name</th><th class="sortable" onclick="sortTable('products','category')">Cat</th><th class="sortable" onclick="sortTable('products','vendor')">Vendor</th><th class="sortable" onclick="sortTable('products','stock')">Stock</th><th class="sortable" onclick="sortTable('products','wholesale')">Wholesale</th><th class="sortable" onclick="sortTable('products','selling')">Selling</th><th>Action</th></tr></thead>
+    <tbody id="invTable"></tbody></table>
+  </div>
+
+  <!-- SALES -->
+  <div class="apage" id="apage-sales">
+    <div style="margin-bottom:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <input type="date" id="sBatchDate">
+      <input type="text" id="sBatchCustomer" placeholder="Customer name">
+      <select id="sBatchPayment"><option>Cash</option><option>UPI</option><option>Card</option><option>Other</option></select>
+      <button class="btn sm" onclick="addSaleRow()">+ Add Row</button>
+      <button class="btn" onclick="saveAllSales()">💾 Save All Sales</button>
+      <span id="salesStatus" style="font-size:12px;color:var(--muted)"></span>
+    </div>
+    <table id="saleEntryTable" style="margin-bottom:14px">
+      <thead><tr><th>Item</th><th>Qty</th><th>Price ₹</th><th>Total</th><th>Note</th><th></th></tr></thead>
+      <tbody id="saleRows"></tbody>
+    </table>
+    <hr style="border-color:var(--border);margin:14px 0">
+    <b style="color:var(--gold)">📋 Sales History</b>
+    <table style="margin-top:8px"><thead><tr>
+      <th class="sortable" onclick="sortTable('sales','date')">Date</th>
+      <th class="sortable" onclick="sortTable('sales','customer')">Customer</th>
+      <th class="sortable" onclick="sortTable('sales','name')">Item</th>
+      <th class="sortable" onclick="sortTable('sales','qty')">Qty</th>
+      <th class="sortable" onclick="sortTable('sales','price')">Price</th>
+      <th class="sortable" onclick="sortTable('sales','total')">Total</th>
+      <th class="sortable" onclick="sortTable('sales','payment')">Payment</th>
+      <th>Action</th>
+    </tr></thead>
+    <tbody id="salesTable"></tbody></table>
+  </div>
+
+  <!-- EXPENSES -->
+  <div class="apage" id="apage-exp">
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <button class="btn sm active" id="expTabBtn" onclick="showExpTab('expenses',this)">Expenses</button>
+      <button class="btn sm" id="settleTabBtn" style="background:var(--navy2);color:var(--muted)" onclick="showExpTab('settlements',this)">Settlements</button>
+    </div>
+    <div id="expensesTab">
+      <div class="formrow">
+        <input type="date" id="eDate">
+        <select id="eCat"><option>Stock Purchase</option><option>Transport</option><option>Packaging</option><option>Meals</option><option>Operations</option><option>Other</option></select>
+        <input type="text" id="eDesc" placeholder="Description">
+        <input type="number" id="eAmount" placeholder="Amount ₹" style="width:90px">
+        <input type="text" id="ePaidBy" placeholder="Paid By">
+        <label style="color:var(--text)"><input type="checkbox" id="eShared" checked> Shared (50:50)</label>
+        <button class="btn" onclick="addExpense()">Add Expense</button>
+      </div>
+      <table><thead><tr>
+        <th class="sortable" onclick="sortTable('expenses','date')">Date</th>
+        <th class="sortable" onclick="sortTable('expenses','category')">Category</th>
+        <th class="sortable" onclick="sortTable('expenses','description')">Description</th>
+        <th class="sortable" onclick="sortTable('expenses','amount')">Amount</th>
+        <th class="sortable" onclick="sortTable('expenses','paid_by')">Paid By</th>
+        <th>Shared</th><th>Each Share</th><th>Action</th>
+      </tr></thead>
+      <tbody id="expTable"></tbody></table>
+      <div id="expSummary" style="margin-top:14px;background:var(--navy2);border-radius:8px;padding:12px;font-size:13px"></div>
+    </div>
+    <div id="settlementsTab" style="display:none">
+      <div class="formrow">
+        <input type="date" id="stDate">
+        <select id="stFrom"><option>Anitha</option><option>Vidhya</option></select>
+        <span style="color:var(--text)">→</span>
+        <select id="stTo"><option>Vidhya</option><option>Anitha</option></select>
+        <input type="number" id="stAmount" placeholder="Amount ₹" style="width:100px">
+        <input type="text" id="stNote" placeholder="Note (optional)">
+        <button class="btn" onclick="addSettlement()">Add Settlement</button>
+      </div>
+      <table><thead><tr>
+        <th class="sortable" onclick="sortTable('settlements','date')">Date</th>
+        <th>From</th><th>To</th>
+        <th class="sortable" onclick="sortTable('settlements','amount')">Amount</th>
+        <th>Note</th><th>Action</th>
+      </tr></thead>
+      <tbody id="settleTable"></tbody></table>
+      <div id="settleSummary" style="margin-top:14px;background:var(--navy2);border-radius:8px;padding:12px;font-size:13px"></div>
+    </div>
+  </div>
+
+  <!-- UPI -->
+  <div class="apage" id="apage-upi">
+    <div class="formrow">
+      <input type="text" id="uName" placeholder="Friendly name">
+      <input type="text" id="uId" placeholder="UPI ID e.g. anvi@oksbi">
+      <label style="color:var(--text)"><input type="checkbox" id="uDefault"> Set as default (shown to customers)</label>
+      <button class="btn" onclick="addUpi()">Add UPI</button>
+    </div>
+    <table><thead><tr><th class="sortable" onclick="sortTable('upi','name')">Name</th><th class="sortable" onclick="sortTable('upi','upi_id')">UPI ID</th><th>Default</th><th>Action</th></tr></thead>
+    <tbody id="upiTable"></tbody></table>
+  </div>
+
+  <!-- BRANDING -->
+  <div class="apage" id="apage-brand">
+    <div class="formrow">
+      <input type="file" id="logoFile" accept="image/*">
+      <button class="btn" onclick="uploadLogo()">Upload as Page Background</button>
+      <button class="btn sm danger" onclick="removeLogo()">Remove Background</button>
+      <span id="brandStatus" style="font-size:12px;color:var(--muted)"></span>
+    </div>
+    <div id="logoPreview" style="margin-top:10px"></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+<script>
+const SUPABASE_URL = "https://dlypzzzmxavtlvcuityr.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_Toty9J7Uy3gBUXx1rugsWQ_AzZapjky";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const ADMIN_USER="admin", ADMIN_PASS="anvi2026";
+let isAdmin=false, currentCat="All";
+let products=[], sales=[], expenses=[], upis=[];
+
+/* ---------- AUTH / NAV ---------- */
+function toggleLogin(){ document.getElementById('loginBox').classList.toggle('show'); }
+function login(){
+  const u=document.getElementById('user').value, p=document.getElementById('pass').value;
+  if(u===ADMIN_USER && p===ADMIN_PASS){
+    isAdmin=true;
+    document.getElementById('publicSite').style.display='none';
+    document.getElementById('adminPanel').classList.add('show');
+    loadAll();
+  } else alert('Invalid credentials');
+}
+function logout(){ isAdmin=false; document.getElementById('adminPanel').classList.remove('show'); document.getElementById('publicSite').style.display='block'; render(); }
+function exitAdmin(){ document.getElementById('adminPanel').classList.remove('show'); document.getElementById('publicSite').style.display='block'; render(); }
+function showAPage(id,btn){
+  document.querySelectorAll('.apage').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.atabs button').forEach(b=>b.classList.remove('active'));
+  document.getElementById('apage-'+id).classList.add('active'); btn.classList.add('active');
+  if(id==='sales'){
+    if(document.getElementById('saleRows').children.length===0) addSaleRow();
+    // re-render sales history in case data loaded after tab was last shown
+    renderSales();
+  }
+  if(id==='exp'){ renderExp(); renderSettlements(); }
+  if(id==='dash'){ renderDash(); }
+}
+
+/* ---------- LIGHTBOX ---------- */
+function openLightbox(src){ document.getElementById('lightboxImg').src=src; document.getElementById('lightbox').classList.add('show'); }
+function closeLightbox(){ document.getElementById('lightbox').classList.remove('show'); }
+
+
+const sortState={};
+function sortTable(table,key){
+  const arrMap={products,sales,expenses,upi};
+  const arr=arrMap[table];
+  const dir = sortState[table+key]==='asc' ? 'desc' : 'asc';
+  sortState[table+key]=dir;
+  arr.sort((a,b)=>{
+    let va=a[key], vb=b[key];
+    if(va==null) va=''; if(vb==null) vb='';
+    if(typeof va==='number'||typeof vb==='number'){ va=Number(va)||0; vb=Number(vb)||0; }
+    if(va<vb) return dir==='asc'?-1:1;
+    if(va>vb) return dir==='asc'?1:-1;
+    return 0;
+  });
+  const renderMap={products:renderInv,sales:renderSales,expenses:renderExp,upi:renderUpi};
+  renderMap[table]();
+}
+const EMAILJS_SERVICE="service_49z0tdp", EMAILJS_TEMPLATE="template_e0o2ubb", EMAILJS_KEY="P0Erz0CS_y7SKXHt9";
+window.addEventListener('load', ()=>{ emailjs.init(EMAILJS_KEY); });
+function notifyAdmin(msg){
+  emailjs.send(EMAILJS_SERVICE, EMAILJS_TEMPLATE, {
+    name     : 'AnVi Collections',
+    email    : 'pnesakkannan@gmail.com',
+    time     : new Date().toLocaleString('en-IN'),
+    message  : msg
+  })
+  .then(r=>console.log('Email sent:',r.status))
+  .catch(e=>console.error('Email failed:',JSON.stringify(e)));
+}
+
+/* ---------- BRANDING / LOGO ---------- */
+async function loadLogo(){
+  const {data,error} = await sb.from('settings').select('*').eq('key','logo_url').maybeSingle();
+  if(!error && data && data.value){
+    document.querySelector('header').style.backgroundImage = "url('"+data.value+"')";
+    const prev=document.getElementById('logoPreview');
+    if(prev) prev.innerHTML='<img src="'+data.value+'" style="max-width:200px;border-radius:8px">';
+  }
+}
+async function uploadLogo(){
+  const file=document.getElementById('logoFile').files[0];
+  const st=document.getElementById('brandStatus');
+  if(!file){alert('Choose an image first');return}
+  try{
+    st.textContent='Uploading...';
+    const fname='logo_'+Date.now()+'_'+file.name.replace(/\s+/g,'_');
+    const {error:upErr}=await sb.storage.from('Earrings').upload(fname,file);
+    if(upErr) throw upErr;
+    const url=sb.storage.from('Earrings').getPublicUrl(fname).data.publicUrl;
+    await sb.from('settings').upsert({key:'logo_url',value:url});
+    await loadLogo();
+    notifyAdmin('Page background/logo updated.');
+    st.textContent='Background updated!';
+  }catch(e){ st.textContent='Error: '+e.message; }
+}
+async function removeLogo(){
+  await sb.from('settings').delete().eq('key','logo_url');
+  document.querySelector('header').style.backgroundImage='';
+  document.getElementById('logoPreview').innerHTML='';
+  document.getElementById('brandStatus').textContent='Background removed.';
+}
+
+async function loadAll(){
+  try{
+    await loadProducts(); await loadSales(); await loadExpenses(); await loadUpi(); await loadSettlements();
+    renderDash(); renderInv(); renderSales(); renderExp(); renderUpi(); renderSettlements();
+  }catch(e){ console.error('loadAll error:',e); }
+}
+async function loadProducts(){
+  const {data,error} = await sb.from('products').select('*').order('created_at',{ascending:false}).limit(999999);
+  products = error? [] : data;
+}
+async function loadSales(){
+  const {data,error} = await sb.from('sales').select('*').order('date',{ascending:false}).order('created_at',{ascending:false}).limit(999999);
+  sales = error? [] : data;
+}
+async function loadExpenses(){
+  const {data,error} = await sb.from('expenses').select('*').order('created_at',{ascending:false}).limit(999999);
+  expenses = error? [] : data;
+}
+async function loadUpi(){
+  const {data,error} = await sb.from('upi').select('*').order('created_at',{ascending:false}).limit(999999);
+  upis = error? [] : data;
+}
+
+/* ---------- DASHBOARD ---------- */
+function renderDash(){
+  const stockVal = products.reduce((s,p)=>s+(p.stock||0)*(p.selling||0),0);
+  const totalSales = sales.reduce((s,r)=>s+(r.total||0),0);
+  const totalExp = expenses.reduce((s,r)=>s+(r.amount||0),0);
+  const sharedExp = expenses.filter(e=>e.shared==='Y').reduce((s,e)=>s+(e.amount||0),0);
+  document.getElementById('kpis').innerHTML = `
+    <div class="kpi"><div class="l">Products</div><div class="v">${products.length}</div></div>
+    <div class="kpi"><div class="l">Stock Value</div><div class="v">₹${stockVal.toFixed(0)}</div></div>
+    <div class="kpi"><div class="l">Total Sales</div><div class="v">₹${totalSales.toFixed(0)}</div></div>
+    <div class="kpi"><div class="l">Total Expenses</div><div class="v">₹${totalExp.toFixed(0)}</div></div>
+    <div class="kpi"><div class="l">Net Profit</div><div class="v">₹${(totalSales-totalExp).toFixed(0)}</div></div>
+    <div class="kpi"><div class="l">Shared Expenses</div><div class="v">₹${sharedExp.toFixed(0)}</div></div>
+    <div class="kpi"><div class="l">Each Share (50:50)</div><div class="v">₹${(sharedExp/2).toFixed(0)}</div></div>`;
+}
+
+/* ---------- INVENTORY ---------- */
+let editProductId=null;
+async function addProduct(){
+  const name=document.getElementById('pName').value.trim();
+  if(!name){alert('Name required');return}
+  const sku=document.getElementById('pSku').value.trim();
+  const cat=document.getElementById('pCat').value;
+  const vendor=document.getElementById('pVendor').value.trim();
+  const stock=parseFloat(document.getElementById('pStock').value)||0;
+  const wholesale=parseFloat(document.getElementById('pWholesale').value)||0;
+  const selling=parseFloat(document.getElementById('pSelling').value)||0;
+  const file=document.getElementById('pImg').files[0];
+  const st=document.getElementById('invStatus');
+  try{
+    let img,path;
+    if(editProductId){
+      const existing=products.find(p=>p.id===editProductId);
+      img=existing.img; path=existing.path;
+    } else { img=''; path=''; }
+    if(file){
+      st.textContent='Uploading image...';
+      const fname=Date.now()+'_'+file.name.replace(/\s+/g,'_');
+      const {error:upErr}=await sb.storage.from('Earrings').upload(fname,file);
+      if(upErr) throw upErr;
+      img=sb.storage.from('Earrings').getPublicUrl(fname).data.publicUrl;
+      path=fname;
+    }
+    const wasEdit=!!editProductId;
+    const oldName = wasEdit ? (products.find(p=>p.id===editProductId)||{}).name : null;
+    const payload={sku,name,category:cat,vendor,stock,wholesale,selling,img,path};
+    if(editProductId){
+      const {error}=await sb.from('products').update(payload).eq('id',editProductId);
+      if(error) throw error;
+      // sync name change to sales records
+      if(oldName && oldName !== name){
+        await sb.from('sales').update({name}).eq('name', oldName);
+      }
+    } else {
+      payload.purchase_qty=stock;
+      const {error}=await sb.from('products').insert(payload);
+      if(error) throw error;
+    }
+    cancelEditProduct();
+    st.textContent='';
+    await loadProducts(); renderInv(); renderDash(); render();
+    notifyAdmin((wasEdit?'Product updated: ':'New product added: ')+name+' ('+cat+') - Stock:'+stock+' Price:₹'+selling);
+  }catch(e){ st.textContent='Error: '+e.message; }
+}
+function editProduct(id){
+  const p=products.find(x=>x.id===id);
+  if(!p)return;
+  editProductId=id;
+  document.getElementById('pName').value=p.name||'';
+  document.getElementById('pSku').value=p.sku||'';
+  document.getElementById('pCat').value=p.category||'Kids';
+  document.getElementById('pVendor').value=p.vendor||'';
+  document.getElementById('pStock').value=p.stock||0;
+  document.getElementById('pWholesale').value=p.wholesale||0;
+  document.getElementById('pSelling').value=p.selling||0;
+  document.getElementById('pImg').value='';
+  document.getElementById('pSubmitBtn').textContent='Update Product';
+  document.getElementById('pCancelBtn').style.display='inline-block';
+  document.getElementById('invStatus').textContent = p.img ? 'Current image will be kept unless you choose a new one.' : 'No image yet — choose one to add.';
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+function cancelEditProduct(){
+  editProductId=null;
+  ['pName','pSku','pVendor','pStock','pWholesale','pSelling'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('pImg').value='';
+  document.getElementById('pSubmitBtn').textContent='Add Product';
+  document.getElementById('pCancelBtn').style.display='none';
+  document.getElementById('invStatus').textContent='';
+}
+async function deleteProduct(id,path){
+  if(!confirm('Delete this product?'))return;
+  const dp=products.find(p=>p.id===id);
+  await sb.from('products').delete().eq('id',id);
+  notifyAdmin('Product DELETED: '+(dp?dp.name:'ID:'+id));
+  if(path){ await sb.storage.from('Earrings').remove([path]); }
+  await loadProducts(); renderInv(); renderDash(); render();
+}
+function renderInv(){
+  document.getElementById('invTable').innerHTML = products.map(p=>`<tr>
+    <td>${p.img?'<img src="'+p.img+'" style="width:40px;height:40px;object-fit:cover;border-radius:4px">':''}</td>
+    <td>${p.sku||'—'}</td><td>${p.name}</td><td>${p.category||''}</td><td>${p.vendor||''}</td>
+    <td>${p.stock}</td><td>₹${p.wholesale}</td><td>₹${p.selling}</td>
+    <td><div class="actions"><button class="btn sm" onclick="editProduct(${p.id})">Edit</button><button class="btn sm danger" onclick="deleteProduct(${p.id},'${p.path||''}')">Delete</button></div></td></tr>`).join('') || '<tr><td colspan="8">No products</td></tr>';
+  document.getElementById('sProduct').innerHTML = products.map(p=>`<option value="${p.id}" data-price="${p.selling}" data-name="${p.name}">${p.name} (stock:${p.stock})</option>`).join('');
+}
+
+/* ---------- SALES ---------- */
+/* ---------- SALES - MULTI ROW ---------- */
+let saleRowCount=0;
+let settlements=[];
+
+function productOptions(selectedId){
+  return products.map(p=>`<option value="${p.id}" data-price="${p.selling}" data-name="${p.name}" ${p.id==selectedId?'selected':''}>${p.name} (₹${p.selling})</option>`).join('');
+}
+function addSaleRow(){
+  const tbody=document.getElementById('saleRows');
+  const idx=saleRowCount++;
+  const tr=document.createElement('tr');
+  tr.id='srow_'+idx;
+  tr.innerHTML=`
+    <td><select class="sr-prod" onchange="updateRowTotal(${idx})" style="background:var(--navy2);color:var(--text);border:1px solid var(--border)">${productOptions()}</select></td>
+    <td><input type="number" class="sr-qty" value="1" min="1" style="width:60px;background:var(--navy2);color:var(--text);border:1px solid var(--border)" onchange="updateRowTotal(${idx})"></td>
+    <td><input type="number" class="sr-price" style="width:80px;background:var(--navy2);color:var(--text);border:1px solid var(--border)" onchange="updateRowTotal(${idx})"></td>
+    <td class="sr-total">₹0</td>
+    <td><input type="text" class="sr-note" placeholder="Note" style="width:100px;background:var(--navy2);color:var(--text);border:1px solid var(--border)"></td>
+    <td><button class="btn sm danger" onclick="document.getElementById('srow_${idx}').remove()">✕</button></td>`;
+  tbody.appendChild(tr);
+  // auto-fill price from product
+  const sel=tr.querySelector('.sr-prod');
+  const opt=sel.options[sel.selectedIndex];
+  if(opt) tr.querySelector('.sr-price').value=opt.dataset.price||'';
+  updateRowTotal(idx);
+  sel.onchange=function(){ const o=this.options[this.selectedIndex]; tr.querySelector('.sr-price').value=o?o.dataset.price||'':''; updateRowTotal(idx); };
+}
+function updateRowTotal(idx){
+  const tr=document.getElementById('srow_'+idx); if(!tr)return;
+  const qty=parseFloat(tr.querySelector('.sr-qty').value)||0;
+  const price=parseFloat(tr.querySelector('.sr-price').value)||0;
+  tr.querySelector('.sr-total').textContent='₹'+(qty*price).toFixed(2);
+}
+async function saveAllSales(){
+  const rows=[...document.getElementById('saleRows').querySelectorAll('tr')];
+  if(rows.length===0){alert('Add at least one row');return}
+  const date=document.getElementById('sBatchDate').value||new Date().toISOString().slice(0,10);
+  const customer=document.getElementById('sBatchCustomer').value.trim();
+  const payment=document.getElementById('sBatchPayment').value;
+  const st=document.getElementById('salesStatus');
+  st.textContent='Saving...';
+  const inserts=[];
+  const stockUpdates=[];
+  for(const tr of rows){
+    const sel=tr.querySelector('.sr-prod');
+    const opt=sel.options[sel.selectedIndex];
+    if(!opt) continue;
+    const pid=opt.value, pname=opt.dataset.name;
+    const qty=parseFloat(tr.querySelector('.sr-qty').value)||1;
+    const price=parseFloat(tr.querySelector('.sr-price').value)||parseFloat(opt.dataset.price)||0;
+    const note=tr.querySelector('.sr-note').value.trim();
+    const total=qty*price;
+    inserts.push({date,customer,sku:pid,name:pname,qty,price,total,payment,note});
+    const prod=products.find(p=>p.id==pid);
+    if(prod) stockUpdates.push({id:prod.id, stock:Math.max(0,(prod.stock||0)-qty)});
+  }
+  const summary=inserts.map(i=>i.name+' x'+i.qty+' ₹'+i.total).join(', ');
+  notifyAdmin('New sales batch saved for '+customer+' ('+payment+'): '+summary);
+  await sb.from('sales').insert(inserts);
+  for(const u of stockUpdates){ await sb.from('products').update({stock:u.stock}).eq('id',u.id); }
+  document.getElementById('saleRows').innerHTML='';
+  document.getElementById('sBatchCustomer').value='';
+  saleRowCount=0; st.textContent='Saved!'; setTimeout(()=>st.textContent='',2000);
+  await loadSales(); await loadProducts(); renderSales(); renderInv(); renderDash(); render();
+}
+
+async function deleteSale(id){
+  if(!confirm('Delete this sale? Stock will be restored.'))return;
+  const ds=sales.find(r=>r.id===id);
+  await sb.from('sales').delete().eq('id',id);
+  notifyAdmin('Sale DELETED: '+(ds?ds.name+' x'+ds.qty+' ₹'+ds.total:'ID:'+id));
+  if(ds){
+    const prod=products.find(p=>p.name===ds.name||p.id==ds.sku);
+    if(prod){ await sb.from('products').update({stock:(prod.stock||0)+(ds.qty||0)}).eq('id',prod.id); }
+  }
+  await loadSales(); await loadProducts(); renderSales(); renderInv(); renderDash(); render();
+}
+
+function renderSales(){
+  const el=document.getElementById('salesTable');
+  if(!el) return;
+  if(!sales||sales.length===0){
+    el.innerHTML='<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--muted)">No sales records yet</td></tr>';
+    return;
+  }
+  el.innerHTML = sales.map(r=>`<tr>
+    <td>${r.date||''}</td><td>${r.customer||'—'}</td><td>${r.name||'—'}</td>
+    <td>${r.qty||0}</td><td>₹${r.price||0}</td><td>₹${r.total||0}</td><td>${r.payment||'—'}</td>
+    <td><div class="actions"><button class="btn sm" onclick="openEditSale(${r.id})">Edit</button><button class="btn sm danger" onclick="deleteSale(${r.id})">Delete</button></div></td></tr>`).join('');
+}
+
+/* inline edit sale modal */
+let editSaleModal=null;
+function openEditSale(id){
+  const r=sales.find(x=>x.id===id); if(!r)return;
+  const existing=document.getElementById('editSaleModal');
+  if(existing) existing.remove();
+  const div=document.createElement('div');
+  div.id='editSaleModal';
+  div.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center';
+  div.innerHTML=`<div style="background:var(--navy2);padding:24px;border-radius:10px;min-width:320px;max-width:90vw">
+    <h3 style="margin-bottom:14px;color:var(--text)">Edit Sale</h3>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <label style="color:var(--muted);font-size:12px">Customer</label>
+      <input id="es_customer" value="${r.customer||''}" style="background:var(--navy);color:var(--text);border:1px solid var(--border);padding:8px;border-radius:6px">
+      <label style="color:var(--muted);font-size:12px">Item</label>
+      <select id="es_product" style="background:var(--navy);color:var(--text);border:1px solid var(--border);padding:8px;border-radius:6px" onchange="document.getElementById('es_price').value=this.options[this.selectedIndex].dataset.price||''">
+        ${productOptions(r.sku)}
+      </select>
+      <label style="color:var(--muted);font-size:12px">Quantity</label>
+      <input id="es_qty" type="number" value="${r.qty||1}" style="background:var(--navy);color:var(--text);border:1px solid var(--border);padding:8px;border-radius:6px">
+      <label style="color:var(--muted);font-size:12px">Price ₹</label>
+      <input id="es_price" type="number" value="${r.price||0}" style="background:var(--navy);color:var(--text);border:1px solid var(--border);padding:8px;border-radius:6px">
+      <label style="color:var(--muted);font-size:12px">Payment</label>
+      <select id="es_payment" style="background:var(--navy);color:var(--text);border:1px solid var(--border);padding:8px;border-radius:6px">
+        ${['Cash','UPI','Card','Other'].map(o=>`<option ${o===r.payment?'selected':''}>${o}</option>`).join('')}
+      </select>
+      <label style="color:var(--muted);font-size:12px">Note</label>
+      <input id="es_note" value="${r.note||''}" style="background:var(--navy);color:var(--text);border:1px solid var(--border);padding:8px;border-radius:6px">
+    </div>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button class="btn" onclick="saveEditSale(${id},${r.qty||0},'${r.name||''}')">Update</button>
+      <button class="btn sm" style="background:#888" onclick="document.getElementById('editSaleModal').remove()">Cancel</button>
+    </div>
+  </div>`;
+  document.body.appendChild(div);
+}
+async function saveEditSale(id, oldQty, oldName){
+  const sel=document.getElementById('es_product');
+  const opt=sel.options[sel.selectedIndex];
+  const pid=opt.value, pname=opt.dataset.name;
+  const customer=document.getElementById('es_customer').value.trim();
+  const qty=parseFloat(document.getElementById('es_qty').value)||1;
+  const price=parseFloat(document.getElementById('es_price').value)||0;
+  const payment=document.getElementById('es_payment').value;
+  const note=document.getElementById('es_note').value.trim();
+  const total=qty*price;
+  notifyAdmin('Sale UPDATED: '+pname+' x'+qty+' ₹'+total+' ('+payment+') - Customer: '+customer);
+  await sb.from('sales').update({customer,sku:pid,name:pname,qty,price,total,payment,note}).eq('id',id);
+  // restore old product stock, deduct new
+  const oldProd=products.find(p=>p.name===oldName||p.id==id);
+  if(oldProd) await sb.from('products').update({stock:(oldProd.stock||0)+oldQty}).eq('id',oldProd.id);
+  const newProd=products.find(p=>p.id==pid);
+  if(newProd) await sb.from('products').update({stock:Math.max(0,(newProd.stock||0)-qty)}).eq('id',newProd.id);
+  document.getElementById('editSaleModal').remove();
+  await loadSales(); await loadProducts(); renderSales(); renderInv(); renderDash(); render();
+}
+
+/* ---------- SETTLEMENTS ---------- */
+function showExpTab(tab, btn){
+  document.getElementById('expensesTab').style.display = tab==='expenses'?'block':'none';
+  document.getElementById('settlementsTab').style.display = tab==='settlements'?'block':'none';
+  document.getElementById('expTabBtn').style.background = tab==='expenses'?'var(--accent)':'var(--navy2)';
+  document.getElementById('expTabBtn').style.color = tab==='expenses'?'#fff':'var(--muted)';
+  document.getElementById('settleTabBtn').style.background = tab==='settlements'?'var(--accent)':'var(--navy2)';
+  document.getElementById('settleTabBtn').style.color = tab==='settlements'?'#fff':'var(--muted)';
+}
+async function loadSettlements(){
+  const {data,error}=await sb.from('settlements').select('*').order('date',{ascending:false}).order('created_at',{ascending:false}).limit(999999);
+  settlements = error?[]:data;
+}
+async function addSettlement(){
+  const date=document.getElementById('stDate').value||new Date().toISOString().slice(0,10);
+  const from_person=document.getElementById('stFrom').value;
+  const to_person=document.getElementById('stTo').value;
+  const amount=parseFloat(document.getElementById('stAmount').value)||0;
+  const note=document.getElementById('stNote').value.trim();
+  if(!amount){alert('Enter amount');return}
+  if(from_person===to_person){alert('From and To cannot be same');return}
+  await sb.from('settlements').insert({date,from_person,to_person,amount,note});
+  notifyAdmin('Settlement: '+from_person+' → '+to_person+' ₹'+amount+(note?' ('+note+')':''));
+  document.getElementById('stAmount').value=''; document.getElementById('stNote').value='';
+  await loadSettlements(); renderSettlements(); renderExp();
+}
+async function deleteSettlement(id){
+  if(!confirm('Delete this settlement?'))return;
+  await sb.from('settlements').delete().eq('id',id);
+  await loadSettlements(); renderSettlements(); renderExp();
+}
+async function editSettlement(id){
+  const r=settlements.find(x=>x.id===id); if(!r)return;
+  const amount=parseFloat(prompt('Amount ₹:',r.amount))||r.amount;
+  const note=prompt('Note:',r.note||'');
+  if(note===null)return;
+  await sb.from('settlements').update({amount,note}).eq('id',id);
+  await loadSettlements(); renderSettlements(); renderExp();
+}
+function renderSettlements(){
+  const el=document.getElementById('settleTable'); if(!el)return;
+  el.innerHTML=settlements.map(r=>`<tr>
+    <td>${r.date||''}</td><td>${r.from_person||''}</td><td>${r.to_person||''}</td>
+    <td>₹${r.amount}</td><td>${r.note||'—'}</td>
+    <td><div class="actions"><button class="btn sm" onclick="editSettlement(${r.id})">Edit</button><button class="btn sm danger" onclick="deleteSettlement(${r.id})">Delete</button></div></td></tr>`).join('')||'<tr><td colspan="6">No settlements yet</td></tr>';
+  // settlement summary
+  const totalExp=expenses.filter(e=>e.shared==='Y').reduce((s,e)=>s+(e.amount||0),0);
+  const eachShare=totalExp/2;
+  const anithaSpent=expenses.filter(e=>e.shared==='Y'&&e.paid_by==='Anitha').reduce((s,e)=>s+(e.amount||0),0);
+  const vidhyaSpent=expenses.filter(e=>e.shared==='Y'&&e.paid_by==='Vidhya').reduce((s,e)=>s+(e.amount||0),0);
+  const v2a=settlements.filter(s=>s.from_person==='Vidhya'&&s.to_person==='Anitha').reduce((s,r)=>s+(r.amount||0),0);
+  const a2v=settlements.filter(s=>s.from_person==='Anitha'&&s.to_person==='Vidhya').reduce((s,r)=>s+(r.amount||0),0);
+  const netVidhyaOwes=(eachShare-vidhyaSpent)-v2a+a2v;
+  const summEl=document.getElementById('settleSummary'); if(!summEl)return;
+  summEl.innerHTML=`<b style="color:var(--gold)">📊 Settlement Summary</b><br><br>
+    Total Shared: <b>₹${totalExp.toFixed(2)}</b> | Each Share: <b>₹${eachShare.toFixed(2)}</b><br><br>
+    Anitha Paid: <b>₹${anithaSpent.toFixed(2)}</b> | Vidhya Paid: <b>₹${vidhyaSpent.toFixed(2)}</b><br><br>
+    Vidhya → Anitha (settled): <b>₹${v2a.toFixed(2)}</b> | Anitha → Vidhya (settled): <b>₹${a2v.toFixed(2)}</b><br><br>
+    ${Math.abs(netVidhyaOwes)<0.01?'<span style="color:var(--green)">✅ All settled!</span>':netVidhyaOwes>0?`<span style="color:#f5a623">⚠️ Vidhya still owes Anitha: <b>₹${netVidhyaOwes.toFixed(2)}</b></span>`:`<span style="color:#f5a623">⚠️ Anitha still owes Vidhya: <b>₹${Math.abs(netVidhyaOwes).toFixed(2)}</b></span>`}`;
+}
+
+
+async function addExpense(){
+  const date=document.getElementById('eDate').value || new Date().toISOString().slice(0,10);
+  const category=document.getElementById('eCat').value;
+  const description=document.getElementById('eDesc').value.trim();
+  const amount=parseFloat(document.getElementById('eAmount').value)||0;
+  const paid_by=document.getElementById('ePaidBy').value.trim();
+  const shared=document.getElementById('eShared').checked?'Y':'N';
+  const split_amount=shared==='Y'?Math.round(amount/2*100)/100:0;
+  await sb.from('expenses').insert({date,category,description,amount,paid_by,shared,split_amount});
+  notifyAdmin('New expense: '+category+' - '+description+' ₹'+amount+' (Paid by: '+paid_by+') Shared:'+shared+(shared==='Y'?' Each:₹'+split_amount:''));
+  document.getElementById('eDesc').value=''; document.getElementById('eAmount').value=''; document.getElementById('ePaidBy').value='';
+  await loadExpenses(); renderExp(); renderDash();
+}
+async function deleteExpense(id){
+  if(!confirm('Delete this expense?'))return;
+  await sb.from('expenses').delete().eq('id',id);
+  await loadExpenses(); renderExp(); renderDash();
+}
+function renderExp(){
+  document.getElementById('expTable').innerHTML = expenses.map(r=>`<tr>
+    <td>${r.date||''}</td><td>${r.category||''}</td><td>${r.description||''}</td><td>₹${r.amount}</td><td>${r.paid_by||''}</td>
+    <td>${r.shared==='Y'?'✅ Yes':'—'}</td><td>${r.shared==='Y'?'₹'+(r.split_amount||Math.round(r.amount/2*100)/100):'—'}</td>
+    <td><div class="actions"><button class="btn sm" onclick="editExpense(${r.id})">Edit</button><button class="btn sm danger" onclick="deleteExpense(${r.id})">Delete</button></div></td></tr>`).join('') || '<tr><td colspan="8">No expenses yet</td></tr>';
+  // split summary — use actual settlements from settlements table
+  const sharedExp=expenses.filter(e=>e.shared==='Y');
+  const totalShared=sharedExp.reduce((s,e)=>s+(e.amount||0),0);
+  const eachShare=totalShared/2;
+  const anithaSpent=sharedExp.filter(e=>e.paid_by==='Anitha').reduce((s,e)=>s+(e.amount||0),0);
+  const vidhyaSpent=sharedExp.filter(e=>e.paid_by==='Vidhya').reduce((s,e)=>s+(e.amount||0),0);
+  const v2a=settlements.filter(s=>s.from_person==='Vidhya'&&s.to_person==='Anitha').reduce((s,r)=>s+(r.amount||0),0);
+  const a2v=settlements.filter(s=>s.from_person==='Anitha'&&s.to_person==='Vidhya').reduce((s,r)=>s+(r.amount||0),0);
+  const netVidhyaOwes=(eachShare-vidhyaSpent)-v2a+a2v;
+  const summEl=document.getElementById('expSummary');
+  if(summEl) summEl.innerHTML=`
+    <b style="color:var(--gold)">📊 Shared Expense Summary (50:50 — Anitha & Vidhya)</b><br><br>
+    Total Shared: <b>₹${totalShared.toFixed(2)}</b> | Each Share: <b>₹${eachShare.toFixed(2)}</b><br><br>
+    Anitha Paid: <b>₹${anithaSpent.toFixed(2)}</b> | Vidhya Paid: <b>₹${vidhyaSpent.toFixed(2)}</b><br><br>
+    Vidhya → Anitha (settled): <b>₹${v2a.toFixed(2)}</b> | Anitha → Vidhya (settled): <b>₹${a2v.toFixed(2)}</b><br><br>
+    ${Math.abs(netVidhyaOwes)<0.01?'<span style="color:var(--green)">✅ All settled!</span>':netVidhyaOwes>0?`<span style="color:#f5a623">⚠️ Vidhya still owes Anitha: <b>₹${netVidhyaOwes.toFixed(2)}</b></span>`:`<span style="color:#f5a623">⚠️ Anitha still owes Vidhya: <b>₹${Math.abs(netVidhyaOwes).toFixed(2)}</b></span>`}
+    <br><small style="color:var(--muted)">Go to Settlements tab to add/edit settlement entries</small>`;
+}
+async function editExpense(id){
+  const r=expenses.find(x=>x.id===id); if(!r)return;
+  const description=prompt('Description:',r.description||'');
+  if(description===null)return;
+  const amount=parseFloat(prompt('Amount ₹:',r.amount))||r.amount;
+  const paid_by=prompt('Paid By:',r.paid_by||'');
+  await sb.from('expenses').update({description,amount,paid_by}).eq('id',id);
+  notifyAdmin('Expense UPDATED: '+description+' ₹'+amount+' (Paid by: '+paid_by+')');
+  await loadExpenses(); renderExp(); renderDash();
+}
+
+/* ---------- UPI ---------- */
+async function addUpi(){
+  const name=document.getElementById('uName').value.trim();
+  const upi_id=document.getElementById('uId').value.trim();
+  const is_default=document.getElementById('uDefault').checked;
+  if(!name||!upi_id){alert('Name and UPI ID required');return}
+  if(is_default){ await sb.from('upi').update({is_default:false}).neq('id',0); }
+  await sb.from('upi').insert({name,upi_id,is_default});
+  notifyAdmin('New UPI added: '+name+' ('+upi_id+')'+(is_default?' [Set as Default]':''));
+  document.getElementById('uName').value=''; document.getElementById('uId').value=''; document.getElementById('uDefault').checked=false;
+  await loadUpi(); renderUpi(); renderUpiPublic();
+}
+async function deleteUpi(id){
+  if(!confirm('Delete this UPI?'))return;
+  await sb.from('upi').delete().eq('id',id);
+  await loadUpi(); renderUpi(); renderUpiPublic();
+}
+function renderUpi(){
+  document.getElementById('upiTable').innerHTML = upis.map(u=>`<tr>
+    <td>${u.name}</td><td>${u.upi_id}</td><td>${u.is_default?'✅':''}</td>
+    <td><div class="actions"><button class="btn sm" onclick="editUpi(${u.id})">Edit</button><button class="btn sm danger" onclick="deleteUpi(${u.id})">Delete</button></div></td></tr>`).join('') || '<tr><td colspan="4">No UPI accounts</td></tr>';
+}
+async function editUpi(id){
+  const u=upis.find(x=>x.id===id); if(!u)return;
+  const name=prompt('Name:',u.name||'');
+  if(name===null)return;
+  const upi_id=prompt('UPI ID:',u.upi_id||'');
+  const setDefault=confirm('Set as default UPI shown to customers?');
+  if(setDefault){ await sb.from('upi').update({is_default:false}).neq('id',0); }
+  await sb.from('upi').update({name,upi_id,is_default:setDefault}).eq('id',id);
+  await loadUpi(); renderUpi(); renderUpiPublic();
+}
+function renderUpiPublic(){
+  const def = upis.find(u=>u.is_default) || upis[0];
+  const box = document.getElementById('upiPublic');
+  if(!def){ box.innerHTML=''; return; }
+  const qr = 'https://api.qrserver.com/v1/create-qr-code/?size=180x180&data='+encodeURIComponent('upi://pay?pa='+def.upi_id+'&pn=AnVi Collections');
+  box.innerHTML = `<div class="upi-box"><b>Pay via UPI</b><br><img src="${qr}" alt="UPI QR"><br>${def.upi_id}</div>`;
+}
+
+/* ---------- PUBLIC GALLERY ---------- */
+function filterCat(cat,btn){
+  currentCat=cat;
+  document.querySelectorAll('.tabs button').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  render();
+}
+function stockBadge(stock){
+  if(stock===undefined||stock===null) return '';
+  if(stock<=0) return '<span class="stock-badge out">Out of Stock</span>';
+  if(stock<=3) return '<span class="stock-badge low">Low Stock</span>';
+  return '<span class="stock-badge in">In Stock</span>';
+}
+function render(){
+  const grid=document.getElementById('grid');
+  const items = currentCat==='All'? products : products.filter(p=>p.category===currentCat);
+  grid.innerHTML='';
+  if(items.length===0){grid.innerHTML='<p>No items yet.</p>';return}
+  items.forEach(item=>{
+    const card=document.createElement('div'); card.className='card';
+    card.innerHTML=`<img src="${item.img}" alt="${item.name}">
+      <div class="info"><b>${item.name}</b>
+      <small>${item.category||''}${item.selling?' • ₹'+item.selling:''}</small>
+      ${stockBadge(item.stock)}</div>`;
+    card.querySelector('img').onclick=()=>openLightbox(item.img);
+    grid.appendChild(card);
+  });
+  renderUpiPublic();
+}
+
+/* ---------- INIT ---------- */
+(async function(){
+  await loadProducts(); await loadUpi(); await loadLogo();
+  render();
+})();
+</script>
+</body>
+</html>
