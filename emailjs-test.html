@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head><title>EmailJS Debug</title></head>
+<body style="font-family:Arial;padding:20px">
+<h3>EmailJS Debug Test</h3>
+<button onclick="test()" style="padding:10px 20px;background:#c9788d;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:16px">Send Test Email</button>
+<div id="result" style="margin-top:20px;font-size:14px;white-space:pre-wrap"></div>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+<script>
+emailjs.init("P0Erz0CS_y7SKXHt9");
+
+function log(msg){ document.getElementById('result').innerHTML += msg + '\n'; }
+
+async function test(){
+  document.getElementById('result').innerHTML = '';
+  log('Step 1: Calling emailjs.send...');
+  try {
+    const response = await emailjs.send(
+      "service_49z0tdp",
+      "template_1ywui35",
+      {
+        name    : "AnVi Collections",
+        email   : "pnesakkannan@gmail.com",
+        time    : new Date().toLocaleString("en-IN"),
+        message : "DEBUG TEST - If you see this email it works!"
+      }
+    );
+    log('✅ SUCCESS! Status: ' + response.status + ' Text: ' + response.text);
+    log('Check pnesakkannan@gmail.com inbox (and spam folder)');
+  } catch(err) {
+    log('❌ FAILED!');
+    log('Status: ' + err.status);
+    log('Error text: ' + err.text);
+    log('Full error: ' + JSON.stringify(err));
+  }
+}
+</script>
+</body>
+</html>
