@@ -931,7 +931,7 @@ function renderCartItems(){
 function checkoutWhatsApp(){
   const lines=cart.map(c=>`• ${c.name} x${c.qty} = ₹${(c.price*c.qty).toFixed(0)}${c.note?' ('+c.note+')':''}`);
   const total=cart.reduce((s,c)=>s+(c.price*c.qty),0);
-  const msg='Hi AnVi Collections! I would like to order:\n\n'+lines.join('\n')+'\n\nTotal: ₹'+total.toFixed(0)+'\n\nPlease confirm availability.';
+  const msg='🛍 *Order from AnVi Collections*\n\n'+lines.join('\n')+'\n\n*Grand Total: ₹'+total.toFixed(0)+'*\n\nPlease confirm & share payment details 🙏';
   const encoded=encodeURIComponent(msg);
   const isMobile=/Android|iPhone|iPad/i.test(navigator.userAgent);
   const url=isMobile
