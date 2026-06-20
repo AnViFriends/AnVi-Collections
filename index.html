@@ -868,7 +868,7 @@ function addToCart(id){
   } else {
     cart.push({id,name:p.name,price:p.selling||0,img:p.img||'',stock:p.stock||0,qty:1,note:''});
   }
-  updateCartBadge(); render(); openCart();
+  updateCartBadge(); render();
 }
 function updateCartBadge(){
   const total=cart.reduce((s,c)=>s+c.qty,0);
@@ -932,15 +932,31 @@ function checkoutWhatsApp(){
   const lines=cart.map(c=>`• ${c.name} x${c.qty} = ₹${(c.price*c.qty).toFixed(0)}${c.note?' ('+c.note+')':''}`);
   const total=cart.reduce((s,c)=>s+(c.price*c.qty),0);
   const msg='Hi AnVi Collections! I would like to order:\n\n'+lines.join('\n')+'\n\nTotal: ₹'+total.toFixed(0)+'\n\nPlease confirm availability.';
-  window.open('https://wa.me/919790531188?text='+encodeURIComponent(msg),'_blank');
+  const encoded=encodeURIComponent(msg);
+  const isMobile=/Android|iPhone|iPad/i.test(navigator.userAgent);
+  const url=isMobile
+    ?'https://wa.me/919790531188?text='+encoded
+    :'https://web.whatsapp.com/send?phone=919790531188&text='+encoded;
+  window.open(url,'_blank');
 }
 function checkoutUPI(){
-  const def=upis.find(u=>u.is_default)||upis[0];
   const total=cart.reduce((s,c)=>s+(c.price*c.qty),0);
   const upiBox=document.getElementById('cartUpiBox');
-  if(!def){ upiBox.innerHTML='<p style="color:#e74c3c">No UPI configured yet.</p>'; return; }
-  const qr='https://api.qrserver.com/v1/create-qr-code/?size=180x180&data='+encodeURIComponent('upi://pay?pa='+def.upi_id+'&pn=AnVi Collections&am='+total.toFixed(0));
-  upiBox.innerHTML=`<div class="upi-box"><b>Scan to Pay ₹${total.toFixed(0)}</b><br><img src="${qr}" alt="UPI QR"><br><small>${def.upi_id}</small><br><small style="color:#999">After payment, screenshot and send via WhatsApp</small></div>`;
+  if(!upis||upis.length===0){ upiBox.innerHTML='<p style="color:#e74c3c;text-align:center">No UPI configured yet.</p>'; return; }
+  const qrs=upis.map(u=>{
+    const qr='https://api.qrserver.com/v1/create-qr-code/?size=160x160&data='+encodeURIComponent('upi://pay?pa='+u.upi_id+'&pn=AnVi Collections&am='+total.toFixed(0));
+    return `<div style="text-align:center;background:#fff;border:2px solid ${u.is_default?'var(--accent)':'#eee'};border-radius:10px;padding:12px;flex:1;min-width:140px">
+      <b style="display:block;margin-bottom:6px;color:#333">${u.name}</b>
+      <img src="${qr}" alt="UPI QR" style="width:160px;height:160px">
+      <div style="font-size:12px;color:#777;margin-top:6px">${u.upi_id}</div>
+      ${u.is_default?'<span style="font-size:11px;background:var(--accent);color:#fff;padding:2px 8px;border-radius:10px">Default</span>':''}
+    </div>`;
+  }).join('');
+  upiBox.innerHTML=`<div style="margin-top:14px">
+    <b style="display:block;margin-bottom:10px;color:#333">Pay ₹${total.toFixed(0)} to:</b>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">${qrs}</div>
+    <p style="font-size:12px;color:#999;text-align:center;margin-top:10px">Scan any QR → Pay → Send screenshot via WhatsApp</p>
+  </div>`;
 }
 
 /* ---------- INIT ---------- */
