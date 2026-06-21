@@ -155,11 +155,19 @@ th.sortable:hover{color:var(--accent)}
   </div>
   <div class="atabs">
     <button class="active" onclick="showAPage('dash',this)">Dashboard</button>
+    <button onclick="showAPage('orders',this)">🔔 Orders</button>
     <button onclick="showAPage('inv',this)">Inventory</button>
     <button onclick="showAPage('sales',this)">Sales</button>
     <button onclick="showAPage('exp',this)">Expenses</button>
     <button onclick="showAPage('upi',this)">UPI Settings</button>
     <button onclick="showAPage('brand',this)">Branding</button>
+  </div>
+
+  <!-- ORDERS -->
+  <div class="apage" id="apage-orders">
+    <p style="color:var(--muted);font-size:13px;margin-bottom:12px">Verify UPI payment screenshots from WhatsApp, then confirm below to update stock & record sale.</p>
+    <table><thead><tr><th>Date</th><th>Customer</th><th>Items</th><th>Total</th><th>Paid To</th><th>Status</th><th>Action</th></tr></thead>
+    <tbody id="ordersTable"></tbody></table>
   </div>
 
   <!-- DASHBOARD -->
@@ -322,6 +330,7 @@ function showAPage(id,btn){
   }
   if(id==='exp'){ renderExp(); renderSettlements(); }
   if(id==='dash'){ renderDash(); }
+  if(id==='orders'){ loadPendingOrders().then(renderOrders); }
 }
 
 /* ---------- LIGHTBOX ---------- */
@@ -391,10 +400,54 @@ async function removeLogo(){
   document.getElementById('brandStatus').textContent='Background removed.';
 }
 
+let pendingOrders=[];
+async function loadPendingOrders(){
+  const {data,error}=await sb.from('pending_orders').select('*').order('created_at',{ascending:false}).limit(999999);
+  pendingOrders=error?[]:data;
+}
+function renderOrders(){
+  const el=document.getElementById('ordersTable'); if(!el)return;
+  if(!pendingOrders.length){ el.innerHTML='<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--muted)">No orders yet</td></tr>'; return; }
+  el.innerHTML=pendingOrders.map(o=>{
+    const items=typeof o.items==='string'?JSON.parse(o.items):o.items||[];
+    const itemList=items.map(i=>i.name+' x'+i.qty).join(', ');
+    const isPending=o.status==='pending';
+    return `<tr>
+      <td>${o.date||''}</td><td>${o.customer_name||''}</td><td style="font-size:12px">${itemList}</td>
+      <td>₹${o.total}</td><td>${o.paid_to||''}</td>
+      <td><span style="padding:3px 8px;border-radius:10px;font-size:12px;background:${isPending?'#fff4e0':'#e6f7ee'};color:${isPending?'#f5a623':'var(--green)'}">${o.status}</span></td>
+      <td><div class="actions">
+        ${isPending?`<button class="btn sm" onclick="confirmOrder(${o.id})">✅ Confirm</button>
+        <button class="btn sm danger" onclick="rejectOrder(${o.id})">❌ Reject</button>`:'—'}
+      </div></td></tr>`;
+  }).join('');
+}
+async function confirmOrder(id){
+  const o=pendingOrders.find(x=>x.id===id); if(!o)return;
+  const items=typeof o.items==='string'?JSON.parse(o.items):o.items||[];
+  if(!confirm('Confirm payment received from '+o.customer_name+' ₹'+o.total+'?\nThis will record the sale and deduct stock.'))return;
+  const inserts=items.map(c=>({date:o.date,customer:o.customer_name,sku:String(c.id),name:c.name,qty:c.qty,price:c.price,total:c.price*c.qty,payment:'UPI',paid_to:o.paid_to,note:c.note||''}));
+  await sb.from('sales').insert(inserts);
+  for(const c of items){
+    const prod=products.find(p=>p.id==c.id);
+    if(prod) await sb.from('products').update({stock:Math.max(0,(prod.stock||0)-c.qty)}).eq('id',prod.id);
+  }
+  await sb.from('pending_orders').update({status:'confirmed'}).eq('id',id);
+  notifyAdmin('✅ Order CONFIRMED: '+o.customer_name+' ₹'+o.total+' paid to '+o.paid_to);
+  await loadAll();
+}
+async function rejectOrder(id){
+  const o=pendingOrders.find(x=>x.id===id); if(!o)return;
+  if(!confirm('Reject this order from '+o.customer_name+'?\nNo stock changes will be made.'))return;
+  await sb.from('pending_orders').update({status:'rejected'}).eq('id',id);
+  notifyAdmin('❌ Order REJECTED: '+o.customer_name+' ₹'+o.total);
+  await loadPendingOrders(); renderOrders();
+}
+
 async function loadAll(){
   try{
-    await loadProducts(); await loadSales(); await loadExpenses(); await loadUpi(); await loadSettlements();
-    renderDash(); renderInv(); renderSales(); renderExp(); renderUpi(); renderSettlements();
+    await loadProducts(); await loadSales(); await loadExpenses(); await loadUpi(); await loadSettlements(); await loadPendingOrders();
+    renderDash(); renderInv(); renderSales(); renderExp(); renderUpi(); renderSettlements(); renderOrders();
   }catch(e){ console.error('loadAll error:',e); }
 }
 async function loadProducts(){
@@ -943,21 +996,62 @@ function checkoutUPI(){
   const total=cart.reduce((s,c)=>s+(c.price*c.qty),0);
   const upiBox=document.getElementById('cartUpiBox');
   if(!upis||upis.length===0){ upiBox.innerHTML='<p style="color:#e74c3c;text-align:center">No UPI configured yet.</p>'; return; }
-  const qrs=upis.map(u=>{
-    const qr='https://api.qrserver.com/v1/create-qr-code/?size=160x160&data='+encodeURIComponent('upi://pay?pa='+u.upi_id+'&pn=AnVi Collections&am='+total.toFixed(0));
-    return `<div style="text-align:center;background:#fff;border:2px solid ${u.is_default?'var(--accent)':'#eee'};border-radius:10px;padding:12px;flex:1;min-width:140px">
-      <b style="display:block;margin-bottom:6px;color:#333">${u.name}</b>
-      <img src="${qr}" alt="UPI QR" style="width:160px;height:160px">
-      <div style="font-size:12px;color:#777;margin-top:6px">${u.upi_id}</div>
-      ${u.is_default?'<span style="font-size:11px;background:var(--accent);color:#fff;padding:2px 8px;border-radius:10px">Default</span>':''}
-    </div>`;
-  }).join('');
-  upiBox.innerHTML=`<div style="margin-top:14px">
-    <b style="display:block;margin-bottom:10px;color:#333">Pay ₹${total.toFixed(0)} to:</b>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">${qrs}</div>
-    <p style="font-size:12px;color:#999;text-align:center;margin-top:10px">Scan any QR → Pay → Send screenshot via WhatsApp</p>
+  const options=upis.map(u=>`<option value="${u.upi_id}">${u.name} (${u.upi_id})</option>`).join('');
+  upiBox.innerHTML=`<div style="margin-top:14px;background:#fff8f9;border:1px solid #f0d0d8;border-radius:10px;padding:16px">
+    <b style="display:block;margin-bottom:10px;color:#333">💳 Pay ₹${total.toFixed(0)} via UPI</b>
+    <label style="font-size:13px;color:#666;display:block;margin-bottom:6px">Select who to pay:</label>
+    <select id="upiSelect" style="width:100%;padding:10px;border-radius:8px;border:1px solid #ddd;font-size:14px;margin-bottom:12px">${options}</select>
+    <button onclick="launchUPIApp(${total})" style="width:100%;padding:12px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer">
+      Open UPI App to Pay ₹${total.toFixed(0)}
+    </button>
+    <p style="font-size:11px;color:#999;text-align:center;margin-top:8px">Opens GPay, PhonePe, BHIM, Paytm or any UPI app installed on your phone</p>
   </div>`;
 }
+
+function launchUPIApp(total){
+  const sel=document.getElementById('upiSelect');
+  const upiId=sel.value;
+  const upiName=sel.options[sel.selectedIndex].text.split(' (')[0];
+  const isMobile=/Android|iPhone|iPad/i.test(navigator.userAgent);
+  if(!isMobile){
+    alert('UPI app payment only works on mobile.\n\nUPI ID to pay manually:\n'+upiId);
+    return;
+  }
+  // save pending order BEFORE launching UPI app
+  savePendingOrder(upiId, upiName, total);
+  const upiUrl='upi://pay?pa='+encodeURIComponent(upiId)+'&pn='+encodeURIComponent('AnVi Collections')+'&am='+total.toFixed(2)+'&cu=INR&tn='+encodeURIComponent('AnVi Collections Order');
+  window.location.href=upiUrl;
+}
+
+async function savePendingOrder(upiId, payTo, total){
+  const customerName=prompt('Your name (for order tracking):') || 'Customer';
+  const items=cart.map(c=>({id:c.id,name:c.name,qty:c.qty,price:c.price,note:c.note||''}));
+  await sb.from('pending_orders').insert({
+    date:new Date().toISOString().slice(0,10),
+    customer_name:customerName,
+    items:JSON.stringify(items),
+    total,
+    payment_mode:'UPI',
+    paid_to:payTo,
+    status:'pending',
+    note:'UPI ID: '+upiId
+  });
+  notifyAdmin('🛍 New pending order from '+customerName+' — ₹'+total+' via UPI to '+payTo+'. Verify payment & confirm in Admin → Orders.');
+  // clear cart and show pending message
+  cart=[]; updateCartBadge();
+  document.getElementById('cartUpiBox').innerHTML='';
+  document.getElementById('cartItems').innerHTML=`
+    <div style="text-align:center;padding:20px">
+      <div style="font-size:40px">⏳</div>
+      <b style="color:#333;display:block;margin:10px 0">Order placed — Payment pending</b>
+      <p style="color:#777;font-size:13px">Your order has been recorded. Once we verify your UPI payment, we'll confirm your order via WhatsApp.</p>
+    </div>`;
+  document.getElementById('cartTotal').textContent='';
+  document.getElementById('cartActions').style.display='none';
+  render();
+}
+
+async function confirmCartOrder(upiId, payTo, total){} // kept for compatibility
 
 /* ---------- INIT ---------- */
 (async function(){
