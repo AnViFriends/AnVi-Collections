@@ -166,13 +166,25 @@ th.sortable:hover{color:var(--accent)}
   <!-- ORDERS -->
   <div class="apage" id="apage-orders">
     <p style="color:var(--muted);font-size:13px;margin-bottom:12px">Verify UPI payment screenshots from WhatsApp, then confirm below to update stock & record sale.</p>
-    <table><thead><tr><th>Date</th><th>Customer</th><th>Items</th><th>Total</th><th>Paid To</th><th>Status</th><th>Action</th></tr></thead>
+    <table><thead><tr><th>Date</th><th>Customer</th><th>Items</th><th>Total</th><th>Paid To</th><th>Status</th><th>Note</th><th>Action</th></tr></thead>
     <tbody id="ordersTable"></tbody></table>
   </div>
 
   <!-- DASHBOARD -->
   <div class="apage active" id="apage-dash">
     <div class="kpis" id="kpis"></div>
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;margin-top:14px">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap">
+        <b style="color:var(--text)">📊 Sales Chart</b>
+        <select id="chartPeriod" onchange="renderDash()" style="background:var(--navy2);color:var(--text);border:1px solid var(--border);padding:6px;border-radius:6px">
+          <option value="day">By Day (last 14 days)</option>
+          <option value="week">By Week (last 12 weeks)</option>
+          <option value="month" selected>By Month (last 12 months)</option>
+          <option value="year">By Year</option>
+        </select>
+      </div>
+      <canvas id="salesChart" height="200"></canvas>
+    </div>
   </div>
 
   <!-- INVENTORY -->
@@ -297,6 +309,7 @@ th.sortable:hover{color:var(--accent)}
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
 const SUPABASE_URL = "https://dlypzzzmxavtlvcuityr.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_Toty9J7Uy3gBUXx1rugsWQ_AzZapjky";
@@ -408,20 +421,54 @@ async function loadPendingOrders(){
 }
 function renderOrders(){
   const el=document.getElementById('ordersTable'); if(!el)return;
-  if(!pendingOrders.length){ el.innerHTML='<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--muted)">No orders yet</td></tr>'; return; }
+  if(!pendingOrders.length){ el.innerHTML='<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--muted)">No orders yet</td></tr>'; return; }
   el.innerHTML=pendingOrders.map(o=>{
     const items=typeof o.items==='string'?JSON.parse(o.items):o.items||[];
     const itemList=items.map(i=>i.name+' x'+i.qty).join(', ');
     const isPending=o.status==='pending';
+    const statusColor=o.status==='confirmed'?'#e6f7ee,var(--green)':o.status==='rejected'?'#fdeaea,var(--danger)':'#fff4e0,#f5a623';
+    const [bg,col]=statusColor.split(',');
     return `<tr>
       <td>${o.date||''}</td><td>${o.customer_name||''}</td><td style="font-size:12px">${itemList}</td>
       <td>₹${o.total}</td><td>${o.paid_to||''}</td>
-      <td><span style="padding:3px 8px;border-radius:10px;font-size:12px;background:${isPending?'#fff4e0':'#e6f7ee'};color:${isPending?'#f5a623':'var(--green)'}">${o.status}</span></td>
+      <td><span style="padding:3px 8px;border-radius:10px;font-size:12px;background:${bg};color:${col}">${o.status}</span></td>
+      <td>${o.note||'—'}</td>
       <td><div class="actions">
-        ${isPending?`<button class="btn sm" onclick="confirmOrder(${o.id})">✅ Confirm</button>
-        <button class="btn sm danger" onclick="rejectOrder(${o.id})">❌ Reject</button>`:'—'}
+        ${isPending?`<button class="btn sm" onclick="confirmOrder(${o.id})">✅</button>
+        <button class="btn sm" style="background:#888" onclick="rejectOrder(${o.id})">❌</button>`:''}
+        <button class="btn sm" onclick="editOrder(${o.id})">Edit</button>
+        <button class="btn sm danger" onclick="deleteOrder(${o.id})">Del</button>
       </div></td></tr>`;
   }).join('');
+}
+async function editOrder(id){
+  const o=pendingOrders.find(x=>x.id===id); if(!o)return;
+  const name=prompt('Customer name:',o.customer_name||''); if(name===null)return;
+  const total=parseFloat(prompt('Total ₹:',o.total))||o.total;
+  const paid_to=prompt('Paid To:',o.paid_to||''); if(paid_to===null)return;
+  const note=prompt('Note:',o.note||'');
+  const status=prompt('Status (pending/confirmed/rejected):',o.status)||o.status;
+  await sb.from('pending_orders').update({customer_name:name,total,paid_to,note,status}).eq('id',id);
+  if(status==='confirmed' && o.status!=='confirmed'){
+    const items=typeof o.items==='string'?JSON.parse(o.items):o.items||[];
+    const inserts=items.map(c=>({date:o.date,customer:name,sku:String(c.id),name:c.name,qty:c.qty,price:c.price,total:c.price*c.qty,payment:'UPI',paid_to,note:note||''}));
+    await sb.from('sales').insert(inserts);
+    for(const c of items){
+      const prod=products.find(p=>p.id==c.id);
+      if(prod) await sb.from('products').update({stock:Math.max(0,(prod.stock||0)-c.qty)}).eq('id',prod.id);
+    }
+    notifyAdmin('✅ Order CONFIRMED via edit: '+name+' ₹'+total);
+    await loadAll(); return;
+  }
+  notifyAdmin('📝 Order EDITED: '+name+' ₹'+total+' status:'+status);
+  await loadPendingOrders(); renderOrders();
+}
+async function deleteOrder(id){
+  const o=pendingOrders.find(x=>x.id===id); if(!o)return;
+  if(!confirm('Delete this order? This cannot be undone.'))return;
+  await sb.from('pending_orders').delete().eq('id',id);
+  notifyAdmin('🗑 Order DELETED: '+(o.customer_name||'')+ ' ₹'+o.total);
+  await loadPendingOrders(); renderOrders();
 }
 async function confirmOrder(id){
   const o=pendingOrders.find(x=>x.id===id); if(!o)return;
@@ -469,19 +516,61 @@ async function loadUpi(){
 }
 
 /* ---------- DASHBOARD ---------- */
+let salesChartInst=null;
 function renderDash(){
-  const stockVal = products.reduce((s,p)=>s+(p.stock||0)*(p.selling||0),0);
-  const totalSales = sales.reduce((s,r)=>s+(r.total||0),0);
-  const totalExp = expenses.reduce((s,r)=>s+(r.amount||0),0);
-  const sharedExp = expenses.filter(e=>e.shared==='Y').reduce((s,e)=>s+(e.amount||0),0);
-  document.getElementById('kpis').innerHTML = `
+  const stockVal=products.reduce((s,p)=>s+(p.stock||0)*(p.selling||0),0);
+  const totalSales=sales.reduce((s,r)=>s+(r.total||0),0);
+  const totalExp=expenses.reduce((s,r)=>s+(r.amount||0),0);
+  const sharedExp=expenses.filter(e=>e.shared==='Y').reduce((s,e)=>s+(e.amount||0),0);
+  const pending=pendingOrders.filter(o=>o.status==='pending').length;
+  document.getElementById('kpis').innerHTML=`
     <div class="kpi"><div class="l">Products</div><div class="v">${products.length}</div></div>
     <div class="kpi"><div class="l">Stock Value</div><div class="v">₹${stockVal.toFixed(0)}</div></div>
     <div class="kpi"><div class="l">Total Sales</div><div class="v">₹${totalSales.toFixed(0)}</div></div>
-    <div class="kpi"><div class="l">Total Expenses</div><div class="v">₹${totalExp.toFixed(0)}</div></div>
-    <div class="kpi"><div class="l">Net Profit</div><div class="v">₹${(totalSales-totalExp).toFixed(0)}</div></div>
-    <div class="kpi"><div class="l">Shared Expenses</div><div class="v">₹${sharedExp.toFixed(0)}</div></div>
-    <div class="kpi"><div class="l">Each Share (50:50)</div><div class="v">₹${(sharedExp/2).toFixed(0)}</div></div>`;
+    <div class="kpi"><div class="l">Expenses</div><div class="v">₹${totalExp.toFixed(0)}</div></div>
+    <div class="kpi"><div class="l">Net Profit</div><div class="v" style="color:${totalSales-totalExp>=0?'var(--green)':'var(--danger)'}">₹${(totalSales-totalExp).toFixed(0)}</div></div>
+    <div class="kpi"><div class="l">Each Share</div><div class="v">₹${(sharedExp/2).toFixed(0)}</div></div>
+    <div class="kpi" style="cursor:pointer" onclick="showAPage('orders',document.querySelector('[onclick*=orders]'))"><div class="l">Pending Orders</div><div class="v" style="color:${pending?'#f5a623':'var(--green)'}">${pending}</div></div>`;
+  // chart
+  const period=document.getElementById('chartPeriod')?document.getElementById('chartPeriod').value:'month';
+  const now=new Date();
+  let labels=[], dataMap={};
+  if(period==='day'){
+    for(let i=13;i>=0;i--){ const d=new Date(now); d.setDate(d.getDate()-i); const k=d.toISOString().slice(0,10); labels.push(k); dataMap[k]=0; }
+  } else if(period==='week'){
+    for(let i=11;i>=0;i--){ const d=new Date(now); d.setDate(d.getDate()-i*7); const k=d.toISOString().slice(0,7)+'-W'+(Math.ceil(d.getDate()/7)); labels.push(k); dataMap[k]=0; }
+  } else if(period==='month'){
+    for(let i=11;i>=0;i--){ const d=new Date(now.getFullYear(),now.getMonth()-i,1); const k=d.toISOString().slice(0,7); labels.push(k); dataMap[k]=0; }
+  } else {
+    const years=[...new Set(sales.map(r=>(r.date||'').slice(0,4)).filter(Boolean))].sort();
+    if(!years.length) years.push(String(now.getFullYear()));
+    years.forEach(y=>{ labels.push(y); dataMap[y]=0; });
+  }
+  sales.forEach(r=>{
+    if(!r.date) return;
+    let k='';
+    if(period==='day') k=r.date;
+    else if(period==='week'){ const d=new Date(r.date); k=r.date.slice(0,7)+'-W'+(Math.ceil(d.getDate()/7)); }
+    else if(period==='month') k=r.date.slice(0,7);
+    else k=r.date.slice(0,4);
+    if(k in dataMap) dataMap[k]+=(r.total||0);
+  });
+  const vals=labels.map(l=>dataMap[l]||0);
+  const ctx=document.getElementById('salesChart');
+  if(!ctx) return;
+  if(salesChartInst) salesChartInst.destroy();
+  salesChartInst=new Chart(ctx,{
+    type:'bar',
+    data:{
+      labels,
+      datasets:[{label:'Sales ₹',data:vals,backgroundColor:'rgba(201,120,141,0.7)',borderColor:'#c9788d',borderWidth:1,borderRadius:4}]
+    },
+    options:{
+      responsive:true,
+      plugins:{legend:{labels:{color:'#e8e8f0'}},tooltip:{callbacks:{label:c=>'₹'+c.parsed.y.toFixed(0)}}},
+      scales:{x:{ticks:{color:'#8888aa',maxRotation:45}},y:{ticks:{color:'#8888aa',callback:v=>'₹'+v},beginAtZero:true}}
+    }
+  });
 }
 
 /* ---------- INVENTORY ---------- */
