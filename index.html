@@ -116,7 +116,7 @@ th.sortable:hover{color:var(--accent)}
   </div>
   <div class="grid" id="grid"></div>
 
-  <div id="upiPublic"></div>
+  
 </div>
 
 <footer>© 2026 AnVi Collections. All rights reserved.</footer>
@@ -936,12 +936,12 @@ async function addUpi(){
   await sb.from('upi').insert({name,upi_id,is_default});
   notifyAdmin('New UPI added: '+name+' ('+upi_id+')'+(is_default?' [Set as Default]':''));
   document.getElementById('uName').value=''; document.getElementById('uId').value=''; document.getElementById('uDefault').checked=false;
-  await loadUpi(); renderUpi(); renderUpiPublic();
+  await loadUpi(); renderUpi(); 
 }
 async function deleteUpi(id){
   if(!confirm('Delete this UPI?'))return;
   await sb.from('upi').delete().eq('id',id);
-  await loadUpi(); renderUpi(); renderUpiPublic();
+  await loadUpi(); renderUpi(); 
 }
 function renderUpi(){
   document.getElementById('upiTable').innerHTML = upis.map(u=>`<tr>
@@ -956,7 +956,7 @@ async function editUpi(id){
   const setDefault=confirm('Set as default UPI shown to customers?');
   if(setDefault){ await sb.from('upi').update({is_default:false}).neq('id',0); }
   await sb.from('upi').update({name,upi_id,is_default:setDefault}).eq('id',id);
-  await loadUpi(); renderUpi(); renderUpiPublic();
+  await loadUpi(); renderUpi(); 
 }
 function renderUpiPublic(){
   const def = upis.find(u=>u.is_default) || upis[0];
@@ -997,7 +997,7 @@ function render(){
     if(item.img) card.querySelector('img').onclick=()=>openLightbox(item.img);
     grid.appendChild(card);
   });
-  renderUpiPublic();
+  
 }
 
 /* ---------- CART ---------- */
