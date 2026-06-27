@@ -69,6 +69,21 @@ th.sortable:hover{color:var(--accent)}
 #cartBadge{background:#f5a623;color:#333;border-radius:50%;font-size:10px;font-weight:700;padding:1px 5px;vertical-align:top;margin-left:-6px}
 .add-cart-btn{background:var(--accent);color:#fff;border:none;padding:5px 12px;border-radius:15px;cursor:pointer;font-size:12px;margin-top:6px;width:90%}
 .add-cart-btn:disabled{background:#ccc;cursor:not-allowed}
+/* image gallery swipe */
+.img-gallery{position:relative;width:100%;height:180px;overflow:hidden;background:#f0e0e8}
+.img-gallery .slides{display:flex;height:100%;transition:transform 0.3s ease}
+.img-gallery .slides img{min-width:100%;height:180px;object-fit:cover;cursor:pointer}
+.img-gallery .nav{position:absolute;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.4);color:#fff;border:none;cursor:pointer;padding:4px 8px;font-size:16px;z-index:2}
+.img-gallery .nav.prev{left:0;border-radius:0 4px 4px 0}
+.img-gallery .nav.next{right:0;border-radius:4px 0 0 4px}
+.img-gallery .dots{position:absolute;bottom:4px;width:100%;display:flex;justify-content:center;gap:4px}
+.img-gallery .dot{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.5)}
+.img-gallery .dot.active{background:#fff}
+/* multi image upload in admin */
+.img-thumbs{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.img-thumb{position:relative;width:50px;height:50px}
+.img-thumb img{width:50px;height:50px;object-fit:cover;border-radius:4px}
+.img-thumb .del{position:absolute;top:-4px;right:-4px;background:var(--danger);color:#fff;border:none;border-radius:50%;width:16px;height:16px;font-size:10px;cursor:pointer;line-height:1;padding:0}
 #cartDrawer{display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.5)}
 #cartDrawer.show{display:flex;align-items:flex-end;justify-content:center}
 #cartBox{background:#fff;width:100%;max-width:520px;max-height:90vh;border-radius:16px 16px 0 0;overflow-y:auto;padding:20px;position:relative}
@@ -166,7 +181,7 @@ th.sortable:hover{color:var(--accent)}
   <!-- ORDERS -->
   <div class="apage" id="apage-orders">
     <p style="color:var(--muted);font-size:13px;margin-bottom:12px">Verify UPI payment screenshots from WhatsApp, then confirm below to update stock & record sale.</p>
-    <table><thead><tr><th>Date</th><th>Customer</th><th>Items</th><th>Total</th><th>Paid To</th><th>Status</th><th>Note</th><th>Action</th></tr></thead>
+    <table><thead><tr><th>#</th><th>Date</th><th>Customer</th><th>Items</th><th>Total</th><th>Paid To</th><th>Status</th><th>Note</th><th>Action</th></tr></thead>
     <tbody id="ordersTable"></tbody></table>
   </div>
 
@@ -197,12 +212,14 @@ th.sortable:hover{color:var(--accent)}
       <input type="number" id="pStock" placeholder="Stock" style="width:80px">
       <input type="number" id="pWholesale" placeholder="Wholesale ₹" style="width:100px">
       <input type="number" id="pSelling" placeholder="Selling ₹" style="width:90px">
-      <input type="file" id="pImg" accept="image/*">
+      <input type="file" id="pImg" accept="image/*" multiple>
       <button class="btn" id="pSubmitBtn" onclick="addProduct()">Add Product</button>
       <button class="btn sm" id="pCancelBtn" onclick="cancelEditProduct()" style="display:none;background:#888">Cancel</button>
       <span id="invStatus" style="font-size:12px;color:var(--muted)"></span>
     </div>
-    <table><thead><tr><th>Img</th><th class="sortable" onclick="sortTable('products','sku')">SKU</th><th class="sortable" onclick="sortTable('products','name')">Name</th><th class="sortable" onclick="sortTable('products','category')">Cat</th><th class="sortable" onclick="sortTable('products','vendor')">Vendor</th><th class="sortable" onclick="sortTable('products','stock')">Stock</th><th class="sortable" onclick="sortTable('products','wholesale')">Wholesale</th><th class="sortable" onclick="sortTable('products','selling')">Selling</th><th>Action</th></tr></thead>
+    <div id="pImgThumbs" class="img-thumbs"></div>
+    </div>
+    <table><thead><tr><th>#</th><th>Img</th><th class="sortable" onclick="sortTable('products','sku')">SKU</th><th class="sortable" onclick="sortTable('products','name')">Name</th><th class="sortable" onclick="sortTable('products','category')">Cat</th><th class="sortable" onclick="sortTable('products','vendor')">Vendor</th><th class="sortable" onclick="sortTable('products','stock')">Stock</th><th class="sortable" onclick="sortTable('products','wholesale')">Wholesale</th><th class="sortable" onclick="sortTable('products','selling')">Selling</th><th>Action</th></tr></thead>
     <tbody id="invTable"></tbody></table>
   </div>
 
@@ -422,14 +439,14 @@ async function loadPendingOrders(){
 function renderOrders(){
   const el=document.getElementById('ordersTable'); if(!el)return;
   if(!pendingOrders.length){ el.innerHTML='<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--muted)">No orders yet</td></tr>'; return; }
-  el.innerHTML=pendingOrders.map(o=>{
+  el.innerHTML=pendingOrders.map((o,i)=>{
     const items=typeof o.items==='string'?JSON.parse(o.items):o.items||[];
     const itemList=items.map(i=>i.name+' x'+i.qty).join(', ');
     const isPending=o.status==='pending';
     const statusColor=o.status==='confirmed'?'#e6f7ee,var(--green)':o.status==='rejected'?'#fdeaea,var(--danger)':'#fff4e0,#f5a623';
     const [bg,col]=statusColor.split(',');
     return `<tr>
-      <td>${o.date||''}</td><td>${o.customer_name||''}</td><td style="font-size:12px">${itemList}</td>
+      <td style="color:var(--muted);font-size:12px">${i+1}</td><td>${o.date||''}</td><td>${o.customer_name||''}</td><td style="font-size:12px">${itemList}</td>
       <td>₹${o.total}</td><td>${o.paid_to||''}</td>
       <td><span style="padding:3px 8px;border-radius:10px;font-size:12px;background:${bg};color:${col}">${o.status}</span></td>
       <td>${o.note||'—'}</td>
@@ -494,7 +511,7 @@ async function rejectOrder(id){
 
 async function loadAll(){
   try{
-    await loadProducts(); await loadSales(); await loadExpenses(); await loadUpi(); await loadSettlements(); await loadPendingOrders();
+    await loadProducts(); await loadProductImages(); await loadSales(); await loadExpenses(); await loadUpi(); await loadSettlements(); await loadPendingOrders();
     renderDash(); renderInv(); renderSales(); renderExp(); renderUpi(); renderSettlements(); renderOrders();
   }catch(e){ console.error('loadAll error:',e); }
 }
@@ -575,6 +592,42 @@ function renderDash(){
 
 /* ---------- INVENTORY ---------- */
 let editProductId=null;
+let productImages={}; // {product_id: [{id,img,path}]}
+
+async function loadProductImages(){
+  const {data,error}=await sb.from('product_images').select('*').order('sort_order').limit(999999);
+  productImages={};
+  if(!error && data) data.forEach(r=>{
+    if(!productImages[r.product_id]) productImages[r.product_id]=[];
+    productImages[r.product_id].push(r);
+  });
+}
+async function uploadProductImages(productId, files){
+  const st=document.getElementById('invStatus');
+  for(let i=0;i<files.length;i++){
+    const file=files[i];
+    st.textContent='Uploading image '+(i+1)+' of '+files.length+'...';
+    const fname=Date.now()+'_'+file.name.replace(/\s+/g,'_');
+    const {error:upErr}=await sb.storage.from('Earrings').upload(fname,file);
+    if(upErr){st.textContent='Upload error: '+upErr.message; continue;}
+    const url=sb.storage.from('Earrings').getPublicUrl(fname).data.publicUrl;
+    await sb.from('product_images').insert({product_id:productId,img:url,path:fname,sort_order:i});
+  }
+  st.textContent='';
+}
+async function deleteProductImage(imgId, path){
+  await sb.from('product_images').delete().eq('id',imgId);
+  if(path) await sb.storage.from('Earrings').remove([path]);
+  await loadProductImages(); renderInv(); render();
+}
+function renderProductImageThumbs(productId){
+  const imgs=productImages[productId]||[];
+  const el=document.getElementById('pImgThumbs'); if(!el)return;
+  el.innerHTML=imgs.map(img=>`<div class="img-thumb">
+    <img src="${img.img}">
+    <button class="del" onclick="deleteProductImage(${img.id},'${img.path||''}')">✕</button>
+  </div>`).join('');
+}
 async function addProduct(){
   const name=document.getElementById('pName').value.trim();
   if(!name){alert('Name required');return}
@@ -584,46 +637,47 @@ async function addProduct(){
   const stock=parseFloat(document.getElementById('pStock').value)||0;
   const wholesale=parseFloat(document.getElementById('pWholesale').value)||0;
   const selling=parseFloat(document.getElementById('pSelling').value)||0;
-  const file=document.getElementById('pImg').files[0];
+  const files=document.getElementById('pImg').files;
   const st=document.getElementById('invStatus');
   try{
-    let img,path;
-    if(editProductId){
-      const existing=products.find(p=>p.id===editProductId);
-      img=existing.img; path=existing.path;
-    } else { img=''; path=''; }
-    if(file){
-      st.textContent='Uploading image...';
-      const fname=Date.now()+'_'+file.name.replace(/\s+/g,'_');
-      const {error:upErr}=await sb.storage.from('Earrings').upload(fname,file);
+    let img='',path='';
+    if(editProductId){const existing=products.find(p=>p.id===editProductId); img=existing.img; path=existing.path;}
+    // upload first file as primary (legacy img field)
+    if(files.length>0){
+      st.textContent='Uploading image 1...';
+      const fname=Date.now()+'_'+files[0].name.replace(/\s+/g,'_');
+      const {error:upErr}=await sb.storage.from('Earrings').upload(fname,files[0]);
       if(upErr) throw upErr;
       img=sb.storage.from('Earrings').getPublicUrl(fname).data.publicUrl;
       path=fname;
     }
     const wasEdit=!!editProductId;
-    const oldName = wasEdit ? (products.find(p=>p.id===editProductId)||{}).name : null;
+    const oldName=wasEdit?(products.find(p=>p.id===editProductId)||{}).name:null;
     const payload={sku,name,category:cat,vendor,stock,wholesale,selling,img,path};
+    let productId=editProductId;
     if(editProductId){
       const {error}=await sb.from('products').update(payload).eq('id',editProductId);
       if(error) throw error;
-      // sync name change to sales records
-      if(oldName && oldName !== name){
-        await sb.from('sales').update({name}).eq('name', oldName);
-      }
+      if(oldName && oldName!==name) await sb.from('sales').update({name}).eq('name',oldName);
     } else {
       payload.purchase_qty=stock;
-      const {error}=await sb.from('products').insert(payload);
+      const {data,error}=await sb.from('products').insert(payload).select('id').single();
       if(error) throw error;
+      productId=data.id;
+    }
+    // upload additional images (files[1..n]) to product_images table
+    if(files.length>0){
+      const extra=editProductId?[...files]:[...files].slice(1);
+      if(extra.length>0) await uploadProductImages(productId, extra);
     }
     cancelEditProduct();
     st.textContent='';
-    await loadProducts(); renderInv(); renderDash(); render();
+    await loadProductImages(); await loadProducts(); renderInv(); renderDash(); render();
     notifyAdmin((wasEdit?'Product updated: ':'New product added: ')+name+' ('+cat+') - Stock:'+stock+' Price:₹'+selling);
   }catch(e){ st.textContent='Error: '+e.message; }
 }
 function editProduct(id){
-  const p=products.find(x=>x.id===id);
-  if(!p)return;
+  const p=products.find(x=>x.id===id); if(!p)return;
   editProductId=id;
   document.getElementById('pName').value=p.name||'';
   document.getElementById('pSku').value=p.sku||'';
@@ -635,7 +689,9 @@ function editProduct(id){
   document.getElementById('pImg').value='';
   document.getElementById('pSubmitBtn').textContent='Update Product';
   document.getElementById('pCancelBtn').style.display='inline-block';
-  document.getElementById('invStatus').textContent = p.img ? 'Current image will be kept unless you choose a new one.' : 'No image yet — choose one to add.';
+  const imgs=productImages[id]||[];
+  document.getElementById('invStatus').textContent='Images: '+(p.img?1:0)+imgs.length+' uploaded. Add more or delete below.';
+  renderProductImageThumbs(id);
   window.scrollTo({top:0,behavior:'smooth'});
 }
 function cancelEditProduct(){
@@ -645,6 +701,7 @@ function cancelEditProduct(){
   document.getElementById('pSubmitBtn').textContent='Add Product';
   document.getElementById('pCancelBtn').style.display='none';
   document.getElementById('invStatus').textContent='';
+  document.getElementById('pImgThumbs').innerHTML='';
 }
 async function deleteProduct(id,path){
   if(!confirm('Delete this product?'))return;
@@ -655,7 +712,7 @@ async function deleteProduct(id,path){
   await loadProducts(); renderInv(); renderDash(); render();
 }
 function renderInv(){
-  document.getElementById('invTable').innerHTML = products.map(p=>`<tr>
+  document.getElementById('invTable').innerHTML = products.map((p,i)=>`<tr>
     <td>${p.img?'<img src="'+p.img+'" style="width:40px;height:40px;object-fit:cover;border-radius:4px">':''}</td>
     <td>${p.sku||'—'}</td><td>${p.name}</td><td>${p.category||''}</td><td>${p.vendor||''}</td>
     <td>${p.stock}</td><td>₹${p.wholesale}</td><td>₹${p.selling}</td>
@@ -749,8 +806,8 @@ function renderSales(){
     el.innerHTML='<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--muted)">No sales records yet</td></tr>';
     return;
   }
-  el.innerHTML = sales.map(r=>`<tr>
-    <td>${r.date||''}</td><td>${r.customer||'—'}</td><td>${r.name||'—'}</td>
+  el.innerHTML = sales.map((r,i)=>`<tr>
+    <td style="color:var(--muted);font-size:12px">${i+1}</td><td>${r.date||''}</td><td>${r.customer||'—'}</td><td>${r.name||'—'}</td>
     <td>${r.qty||0}</td><td>₹${r.price||0}</td><td>₹${r.total||0}</td><td>${r.payment||'—'}</td>
     <td><div class="actions"><button class="btn sm" onclick="openEditSale(${r.id})">Edit</button><button class="btn sm danger" onclick="deleteSale(${r.id})">Delete</button></div></td></tr>`).join('');
 }
@@ -853,8 +910,8 @@ async function editSettlement(id){
 }
 function renderSettlements(){
   const el=document.getElementById('settleTable'); if(!el)return;
-  el.innerHTML=settlements.map(r=>`<tr>
-    <td>${r.date||''}</td><td>${r.from_person||''}</td><td>${r.to_person||''}</td>
+  el.innerHTML=settlements.map((r,i)=>`<tr>
+    <td style="color:var(--muted);font-size:12px">${i+1}</td><td>${r.date||''}</td><td>${r.from_person||''}</td><td>${r.to_person||''}</td>
     <td>₹${r.amount}</td><td>${r.note||'—'}</td>
     <td><div class="actions"><button class="btn sm" onclick="editSettlement(${r.id})">Edit</button><button class="btn sm danger" onclick="deleteSettlement(${r.id})">Delete</button></div></td></tr>`).join('')||'<tr><td colspan="6">No settlements yet</td></tr>';
   // settlement summary
@@ -893,8 +950,8 @@ async function deleteExpense(id){
   await loadExpenses(); renderExp(); renderDash();
 }
 function renderExp(){
-  document.getElementById('expTable').innerHTML = expenses.map(r=>`<tr>
-    <td>${r.date||''}</td><td>${r.category||''}</td><td>${r.description||''}</td><td>₹${r.amount}</td><td>${r.paid_by||''}</td>
+  document.getElementById('expTable').innerHTML = expenses.map((r,i)=>`<tr>
+    <td style="color:var(--muted);font-size:12px">${i+1}</td><td>${r.date||''}</td><td>${r.category||''}</td><td>${r.description||''}</td><td>₹${r.amount}</td><td>${r.paid_by||''}</td>
     <td>${r.shared==='Y'?'✅ Yes':'—'}</td><td>${r.shared==='Y'?'₹'+(r.split_amount||Math.round(r.amount/2*100)/100):'—'}</td>
     <td><div class="actions"><button class="btn sm" onclick="editExpense(${r.id})">Edit</button><button class="btn sm danger" onclick="deleteExpense(${r.id})">Delete</button></div></td></tr>`).join('') || '<tr><td colspan="8">No expenses yet</td></tr>';
   // split summary — use actual settlements from settlements table
@@ -966,7 +1023,59 @@ function renderUpiPublic(){
   box.innerHTML = `<div class="upi-box"><b>Pay via UPI</b><br><img src="${qr}" alt="UPI QR"><br>${def.upi_id}</div>`;
 }
 
-/* ---------- PUBLIC GALLERY ---------- */
+function buildGallery(item){
+  const extra=productImages[item.id]||[];
+  const imgs=[];
+  if(item.img) imgs.push(item.img);
+  extra.forEach(e=>{ if(e.img && !imgs.includes(e.img)) imgs.push(e.img); });
+  if(imgs.length===0) return `<div class="img-gallery" style="background:#f0e0e8;display:flex;align-items:center;justify-content:center"><span style="color:#c9788d;font-size:30px">👑</span></div>`;
+  if(imgs.length===1) return `<div class="img-gallery"><div class="slides"><img src="${imgs[0]}" alt="${item.name}" onclick="openLightbox('${imgs[0]}')"></div></div>`;
+  const uid='g'+item.id;
+  const slides=imgs.map(src=>`<img src="${src}" alt="${item.name}" onclick="openLightbox('${src}')">`).join('');
+  const dots=imgs.map((_,i)=>`<div class="dot${i===0?' active':''}" id="${uid}d${i}"></div>`).join('');
+  return `<div class="img-gallery" id="${uid}">
+    <div class="slides" id="${uid}s">${slides}</div>
+    <button class="nav prev" onclick="slideGallery('${uid}',${imgs.length},-1)">‹</button>
+    <button class="nav next" onclick="slideGallery('${uid}',${imgs.length},1)">›</button>
+    <div class="dots">${dots}</div>
+  </div>`;
+}
+const galleryIdx={};
+function slideGallery(uid,total,dir){
+  galleryIdx[uid]=((galleryIdx[uid]||0)+dir+total)%total;
+  const idx=galleryIdx[uid];
+  document.getElementById(uid+'s').style.transform='translateX(-'+idx*100+'%)';
+  for(let i=0;i<total;i++){
+    const d=document.getElementById(uid+'d'+i);
+    if(d) d.className='dot'+(i===idx?' active':'');
+  }
+}
+// auto-swipe loop
+function startAutoSwipe(){
+  setInterval(()=>{
+    products.filter(p=>(p.stock||0)>0).forEach(p=>{
+      const uid='g'+p.id;
+      const el=document.getElementById(uid);
+      if(!el) return;
+      const imgs=productImages[p.id]||[];
+      const total=(p.img?1:0)+imgs.length;
+      if(total>1) slideGallery(uid,total,1);
+    });
+  },3000);
+}
+// touch swipe for gallery
+let touchStartX=0;
+document.addEventListener('touchstart',e=>{ touchStartX=e.touches[0].clientX; },{passive:true});
+document.addEventListener('touchend',e=>{
+  const diff=touchStartX-e.changedTouches[0].clientX;
+  if(Math.abs(diff)<50) return;
+  const gallery=e.target.closest('.img-gallery');
+  if(!gallery) return;
+  const uid=gallery.id;
+  const total=gallery.querySelectorAll('.slides img').length;
+  if(total>1) slideGallery(uid,total,diff>0?1:-1);
+},{passive:true});
+
 function filterCat(cat,btn){
   currentCat=cat;
   document.querySelectorAll('.tabs button').forEach(b=>b.classList.remove('active'));
@@ -988,15 +1097,16 @@ function render(){
   items.forEach(item=>{
     const card=document.createElement('div'); card.className='card';
     const inCart=cart.find(c=>c.id===item.id);
-    card.innerHTML=`<img src="${item.img||''}" alt="${item.name}" ${item.img?'':'style="background:#f0e0e8;min-height:180px"'}>
+    card.innerHTML=`${buildGallery(item)}
       <div class="info"><b>${item.name}</b>
       <small>${item.category||''}${item.selling?' • ₹'+item.selling:''}</small>
       ${stockBadge(item.stock)}
       <br><button class="add-cart-btn" onclick="addToCart(${item.id})">${inCart?'✓ Added ('+inCart.qty+')':'+ Add to Cart'}</button>
       </div>`;
-    if(item.img) card.querySelector('img').onclick=()=>openLightbox(item.img);
     grid.appendChild(card);
   });
+  // start auto swipe after render
+  startAutoSwipe();
   
 }
 
@@ -1143,7 +1253,7 @@ async function confirmCartOrder(upiId, payTo, total){} // kept for compatibility
 
 /* ---------- INIT ---------- */
 (async function(){
-  await loadProducts(); await loadUpi(); await loadLogo();
+  await loadProducts(); await loadProductImages(); await loadUpi(); await loadLogo();
   render();
 })();
 </script>
