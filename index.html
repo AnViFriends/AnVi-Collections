@@ -668,10 +668,9 @@ async function addProduct(){
       if(error) throw error;
       productId=data.id;
     }
-    // upload additional images (files[1..n]) to product_images table
-    if(files.length>0){
-      const extra=editProductId?[...files]:[...files].slice(1);
-      if(extra.length>0) await uploadProductImages(productId, extra);
+    // upload additional images files[1..n] ONLY to product_images (file[0] already used as primary)
+    if(files.length>1){
+      await uploadProductImages(productId, [...files].slice(1));
     }
     cancelEditProduct();
     st.textContent='';
@@ -692,17 +691,32 @@ function editProduct(id){
   document.getElementById('pImg').value='';
   document.getElementById('pSubmitBtn').textContent='Update Product';
   document.getElementById('pCancelBtn').style.display='inline-block';
-  // show existing primary image + extra images as thumbs
-  const extra=productImages[id]||[];
+  document.getElementById('invStatus').textContent='Choose new files to add more images. Existing shown below.';
   const thumbsEl=document.getElementById('pImgThumbs');
   if(thumbsEl){
+    const extra=productImages[id]||[];
     let html='';
-    if(p.img) html+=`<div class="img-thumb"><img src="${p.img}" title="Primary"><span style="font-size:9px;color:var(--muted);display:block;text-align:center">Primary</span></div>`;
-    html+=extra.map(img=>`<div class="img-thumb"><img src="${img.img}"><button class="del" onclick="deleteProductImage(${img.id},'${img.path||''}')">✕</button></div>`).join('');
-    thumbsEl.innerHTML=html;
+    if(p.img) html+=`<div class="img-thumb">
+      <img src="${p.img}" title="Primary image">
+      <button class="del" onclick="removePrimaryImage(${p.id})" title="Remove primary">✕</button>
+      <span style="font-size:9px;color:var(--muted);display:block;text-align:center">Primary</span>
+    </div>`;
+    html+=extra.map(img=>`<div class="img-thumb">
+      <img src="${img.img}">
+      <button class="del" onclick="deleteProductImage(${img.id},'${img.path||''}')">✕</button>
+    </div>`).join('');
+    thumbsEl.innerHTML=html||'<small style="color:var(--muted)">No images yet</small>';
   }
-  document.getElementById('invStatus').textContent='Choose new files to add more images. Existing shown below.';
   window.scrollTo({top:0,behavior:'smooth'});
+}
+async function removePrimaryImage(productId){
+  if(!confirm('Remove primary image?')) return;
+  const prod=products.find(p=>p.id===productId); if(!prod) return;
+  if(prod.path){ await sb.storage.from('Earrings').remove([prod.path]); }
+  await sb.from('products').update({img:'',path:''}).eq('id',productId);
+  await loadProducts(); await loadProductImages();
+  renderInv(); render();
+  editProduct(productId); // refresh thumbs
 }
 function cancelEditProduct(){
   editProductId=null;
