@@ -218,7 +218,6 @@ th.sortable:hover{color:var(--accent)}
       <span id="invStatus" style="font-size:12px;color:var(--muted)"></span>
     </div>
     <div id="pImgThumbs" class="img-thumbs"></div>
-    </div>
     <table><thead><tr><th>#</th><th>Img</th><th class="sortable" onclick="sortTable('products','sku')">SKU</th><th class="sortable" onclick="sortTable('products','name')">Name</th><th class="sortable" onclick="sortTable('products','category')">Cat</th><th class="sortable" onclick="sortTable('products','vendor')">Vendor</th><th class="sortable" onclick="sortTable('products','stock')">Stock</th><th class="sortable" onclick="sortTable('products','wholesale')">Wholesale</th><th class="sortable" onclick="sortTable('products','selling')">Selling</th><th>Action</th></tr></thead>
     <tbody id="invTable"></tbody></table>
   </div>
@@ -641,8 +640,12 @@ async function addProduct(){
   const st=document.getElementById('invStatus');
   try{
     let img='',path='';
-    if(editProductId){const existing=products.find(p=>p.id===editProductId); img=existing.img; path=existing.path;}
-    // upload first file as primary (legacy img field)
+    if(editProductId){
+      const existing=products.find(p=>p.id===editProductId);
+      img=existing?existing.img||'':'';
+      path=existing?existing.path||'':'';
+    }
+    // upload first new file as primary only if chosen
     if(files.length>0){
       st.textContent='Uploading image 1...';
       const fname=Date.now()+'_'+files[0].name.replace(/\s+/g,'_');
@@ -689,9 +692,16 @@ function editProduct(id){
   document.getElementById('pImg').value='';
   document.getElementById('pSubmitBtn').textContent='Update Product';
   document.getElementById('pCancelBtn').style.display='inline-block';
-  const imgs=productImages[id]||[];
-  document.getElementById('invStatus').textContent='Images: '+(p.img?1:0)+imgs.length+' uploaded. Add more or delete below.';
-  renderProductImageThumbs(id);
+  // show existing primary image + extra images as thumbs
+  const extra=productImages[id]||[];
+  const thumbsEl=document.getElementById('pImgThumbs');
+  if(thumbsEl){
+    let html='';
+    if(p.img) html+=`<div class="img-thumb"><img src="${p.img}" title="Primary"><span style="font-size:9px;color:var(--muted);display:block;text-align:center">Primary</span></div>`;
+    html+=extra.map(img=>`<div class="img-thumb"><img src="${img.img}"><button class="del" onclick="deleteProductImage(${img.id},'${img.path||''}')">✕</button></div>`).join('');
+    thumbsEl.innerHTML=html;
+  }
+  document.getElementById('invStatus').textContent='Choose new files to add more images. Existing shown below.';
   window.scrollTo({top:0,behavior:'smooth'});
 }
 function cancelEditProduct(){
@@ -713,10 +723,11 @@ async function deleteProduct(id,path){
 }
 function renderInv(){
   document.getElementById('invTable').innerHTML = products.map((p,i)=>`<tr>
+    <td style="color:var(--muted);font-size:12px">${i+1}</td>
     <td>${p.img?'<img src="'+p.img+'" style="width:40px;height:40px;object-fit:cover;border-radius:4px">':''}</td>
     <td>${p.sku||'—'}</td><td>${p.name}</td><td>${p.category||''}</td><td>${p.vendor||''}</td>
     <td>${p.stock}</td><td>₹${p.wholesale}</td><td>₹${p.selling}</td>
-    <td><div class="actions"><button class="btn sm" onclick="editProduct(${p.id})">Edit</button><button class="btn sm danger" onclick="deleteProduct(${p.id},'${p.path||''}')">Delete</button></div></td></tr>`).join('') || '<tr><td colspan="8">No products</td></tr>';
+    <td><div class="actions"><button class="btn sm" onclick="editProduct(${p.id})">Edit</button><button class="btn sm danger" onclick="deleteProduct(${p.id},'${p.path||''}')">Delete</button></div></td></tr>`).join('') || '<tr><td colspan="10">No products</td></tr>';
   document.getElementById('sProduct').innerHTML = products.map(p=>`<option value="${p.id}" data-price="${p.selling}" data-name="${p.name}">${p.name} (stock:${p.stock})</option>`).join('');
 }
 
