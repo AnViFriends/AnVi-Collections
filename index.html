@@ -468,7 +468,7 @@ async function uploadLogo(){
   try{
     st.textContent='Uploading...';
     const fname='logo_'+Date.now()+'_'+file.name.replace(/\s+/g,'_');
-    const {error:upErr}=await sb.storage.from('Earrings').upload(fname,file);
+    const {error:upErr}=await sb.storage.from('Earrings').upload(fname,file,{upsert:true});
     if(upErr) throw upErr;
     const url=sb.storage.from('Earrings').getPublicUrl(fname).data.publicUrl;
     await sb.from('settings').upsert({key:'logo_url',value:url});
@@ -661,7 +661,7 @@ async function uploadProductImages(productId, files){
     const file=files[i];
     st.textContent='Uploading image '+(i+1)+' of '+files.length+'...';
     const fname=Date.now()+'_'+file.name.replace(/\s+/g,'_');
-    const {error:upErr}=await sb.storage.from('Earrings').upload(fname,file);
+    const {error:upErr}=await sb.storage.from('Earrings').upload(fname,file,{upsert:true});
     if(upErr){st.textContent='Upload error: '+upErr.message; continue;}
     const url=sb.storage.from('Earrings').getPublicUrl(fname).data.publicUrl;
     await sb.from('product_images').insert({product_id:productId,img:url,path:fname,sort_order:i});
@@ -761,7 +761,7 @@ async function addProduct(){
       if(!img && files.length>0){
         st.textContent='Uploading primary image...';
         const fname=Date.now()+'_'+files[0].name.replace(/\s+/g,'_');
-        const {error:upErr}=await sb.storage.from('Earrings').upload(fname,files[0]);
+        const {error:upErr}=await sb.storage.from('Earrings').upload(fname,files[0],{upsert:true});
         if(upErr) throw upErr;
         img=sb.storage.from('Earrings').getPublicUrl(fname).data.publicUrl;
         path=fname;
@@ -778,7 +778,7 @@ async function addProduct(){
       if(files.length>0){
         st.textContent='Uploading...';
         const fname=Date.now()+'_'+files[0].name.replace(/\s+/g,'_');
-        const {error:upErr}=await sb.storage.from('Earrings').upload(fname,files[0]);
+        const {error:upErr}=await sb.storage.from('Earrings').upload(fname,files[0],{upsert:true});
         if(upErr) throw upErr;
         img=sb.storage.from('Earrings').getPublicUrl(fname).data.publicUrl;
         path=fname;
@@ -793,7 +793,12 @@ async function addProduct(){
     st.textContent='';
     await loadProductImages(); await loadProducts(); renderInv(); renderDash(); render();
     notifyAdmin((wasEdit?'Product updated: ':'New product added: ')+name+' ('+cat+') - Stock:'+stock+' Price:₹'+selling);
-  }catch(e){ st.textContent='Error: '+e.message; }
+  }catch(e){
+    const msg=e.message||JSON.stringify(e);
+    if(msg.includes('fetch')) st.textContent='Network error — check connection and try again.';
+    else if(msg.includes('policy')||msg.includes('403')) st.textContent='Storage permission error — check Supabase bucket policy.';
+    else st.textContent='Error: '+msg;
+  }
 }
 function editProduct(id){
   const p=products.find(x=>x.id===id); if(!p)return;
@@ -1400,15 +1405,20 @@ async function launchUPIApp(total){
   document.getElementById('cartTotal').textContent='';
   document.getElementById('cartActions').style.display='none';
   render();
-  // now launch UPI app
-  const upiUrl='upi://pay?pa='+encodeURIComponent(upiId)+'&pn='+encodeURIComponent('AnVi Collections')+'&am='+total.toFixed(2)+'&cu=INR&tn='+encodeURIComponent('AnVi Collections Order');
-  // Use anchor click — more reliable than window.location.href in Chrome
-  const a=document.createElement('a');
-  a.href=upiUrl;
-  a.style.display='none';
-  document.body.appendChild(a);
-  a.click();
-  setTimeout(()=>document.body.removeChild(a),1000);
+  // now launch UPI app - use intent:// for Android Chrome reliability
+  const upiParams='pa='+encodeURIComponent(upiId)+'&pn='+encodeURIComponent('AnVi Collections')+'&am='+total.toFixed(2)+'&cu=INR&tn='+encodeURIComponent('AnVi Collections Order');
+  const isAndroid=/Android/i.test(navigator.userAgent);
+  const isIOS=/iPhone|iPad/i.test(navigator.userAgent);
+  let upiUrl;
+  if(isAndroid){
+    // intent URL works in Chrome Android without being blocked
+    upiUrl='intent://pay?'+upiParams+'#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;S.browser_fallback_url=https://pay.google.com;end';
+    // also try generic upi:// as fallback via window.open
+    window.open('upi://pay?'+upiParams,'_blank');
+  } else if(isIOS){
+    upiUrl='upi://pay?'+upiParams;
+    window.location.href=upiUrl;
+  }
 }
 
 async function confirmCartOrder(upiId, payTo, total){} // kept for compatibility
