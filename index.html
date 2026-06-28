@@ -206,7 +206,18 @@ th.sortable:hover{color:var(--accent)}
   <div class="apage" id="apage-inv">
     <div class="formrow">
       <input type="text" id="pName" placeholder="Item name">
-      <input type="text" id="pSku" placeholder="SKU (optional)">
+      <select id="pCollection" onchange="previewSku()" style="padding:8px;border-radius:6px;border:1px solid #ccc;font-size:13px">
+        <option value="K">K — Kids</option>
+        <option value="J">J — Jhumkas</option>
+        <option value="JP">JP — Jhumkas Premium</option>
+        <option value="H">H — Hangings</option>
+        <option value="KR">KR — Korean</option>
+        <option value="S">S — Studs</option>
+        <option value="TR">TR — Traditional</option>
+        <option value="CZ">CZ — CZ/Stone</option>
+        <option value="L">L — Ladies (Other)</option>
+      </select>
+      <input type="text" id="pSku" placeholder="SKU (auto-generated)" style="width:160px" readonly>
       <select id="pCat"><option value="Kids">Kids</option><option value="Ladies">Ladies</option></select>
       <input type="text" id="pVendor" placeholder="Vendor">
       <input type="number" id="pStock" placeholder="Stock" style="width:80px">
@@ -619,18 +630,20 @@ async function deleteProductImage(imgId, path){
   if(path) await sb.storage.from('Earrings').remove([path]);
   await loadProductImages(); renderInv(); render();
 }
-function renderProductImageThumbs(productId){
-  const imgs=productImages[productId]||[];
-  const el=document.getElementById('pImgThumbs'); if(!el)return;
-  el.innerHTML=imgs.map(img=>`<div class="img-thumb">
-    <img src="${img.img}">
-    <button class="del" onclick="deleteProductImage(${img.id},'${img.path||''}')">✕</button>
-  </div>`).join('');
+function previewSku(){
+  const col=document.getElementById('pCollection').value;
+  const count=products.filter(p=>p.sku&&p.sku.startsWith('AV-'+col+'-')).length+1;
+  document.getElementById('pSku').value='AV-'+col+'-'+String(count).padStart(3,'0')+'-001';
 }
+
 async function addProduct(){
   const name=document.getElementById('pName').value.trim();
   if(!name){alert('Name required');return}
-  const sku=document.getElementById('pSku').value.trim();
+  const collection=document.getElementById('pCollection')?document.getElementById('pCollection').value:'L';
+  const skuInput=document.getElementById('pSku').value.trim();
+  // auto-generate: count existing products in same collection + 1
+  const collCount=products.filter(p=>p.sku&&p.sku.startsWith('AV-'+collection+'-')).length+1;
+  const sku=skuInput&&!skuInput.includes('auto')?skuInput:('AV-'+collection+'-'+String(collCount).padStart(3,'0')+'-001');
   const cat=document.getElementById('pCat').value;
   const vendor=document.getElementById('pVendor').value.trim();
   const stock=parseFloat(document.getElementById('pStock').value)||0;
@@ -645,32 +658,31 @@ async function addProduct(){
       img=existing?existing.img||'':'';
       path=existing?existing.path||'':'';
     }
-    // upload first new file as primary only if chosen
-    if(files.length>0){
-      st.textContent='Uploading image 1...';
-      const fname=Date.now()+'_'+files[0].name.replace(/\s+/g,'_');
-      const {error:upErr}=await sb.storage.from('Earrings').upload(fname,files[0]);
-      if(upErr) throw upErr;
-      img=sb.storage.from('Earrings').getPublicUrl(fname).data.publicUrl;
-      path=fname;
-    }
     const wasEdit=!!editProductId;
     const oldName=wasEdit?(products.find(p=>p.id===editProductId)||{}).name:null;
-    const payload={sku,name,category:cat,vendor,stock,wholesale,selling,img,path};
     let productId=editProductId;
     if(editProductId){
+      // on edit: don't replace primary img — add ALL new files to product_images
+      const payload={sku,name,category:cat,vendor,stock,wholesale,selling,img,path};
       const {error}=await sb.from('products').update(payload).eq('id',editProductId);
       if(error) throw error;
       if(oldName && oldName!==name) await sb.from('sales').update({name}).eq('name',oldName);
+      if(files.length>0) await uploadProductImages(editProductId,[...files]);
     } else {
-      payload.purchase_qty=stock;
+      // on new: file[0] = primary, rest go to product_images
+      if(files.length>0){
+        st.textContent='Uploading...';
+        const fname=Date.now()+'_'+files[0].name.replace(/\s+/g,'_');
+        const {error:upErr}=await sb.storage.from('Earrings').upload(fname,files[0]);
+        if(upErr) throw upErr;
+        img=sb.storage.from('Earrings').getPublicUrl(fname).data.publicUrl;
+        path=fname;
+      }
+      const payload={sku,name,category:cat,vendor,stock,wholesale,selling,img,path,purchase_qty:stock};
       const {data,error}=await sb.from('products').insert(payload).select('id').single();
       if(error) throw error;
       productId=data.id;
-    }
-    // upload additional images files[1..n] ONLY to product_images (file[0] already used as primary)
-    if(files.length>1){
-      await uploadProductImages(productId, [...files].slice(1));
+      if(files.length>1) await uploadProductImages(productId,[...files].slice(1));
     }
     cancelEditProduct();
     st.textContent='';
@@ -689,7 +701,12 @@ function editProduct(id){
   document.getElementById('pWholesale').value=p.wholesale||0;
   document.getElementById('pSelling').value=p.selling||0;
   document.getElementById('pImg').value='';
-  document.getElementById('pSubmitBtn').textContent='Update Product';
+  // set collection from existing SKU e.g. AV-JP-001-001 -> JP
+  const skuParts=(p.sku||'').split('-');
+  const collCode=skuParts.length>=2?skuParts[1]:'L';
+  const collEl=document.getElementById('pCollection');
+  if(collEl)[...collEl.options].forEach(o=>{ if(o.value===collCode) o.selected=true; });
+  document.getElementById('pSku').value=p.sku||'';
   document.getElementById('pCancelBtn').style.display='inline-block';
   document.getElementById('invStatus').textContent='Choose new files to add more images. Existing shown below.';
   const thumbsEl=document.getElementById('pImgThumbs');
