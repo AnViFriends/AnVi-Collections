@@ -1361,39 +1361,51 @@ function checkoutUPI(){
   const total=cart.reduce((s,c)=>s+(c.price*c.qty),0);
   const upiBox=document.getElementById('cartUpiBox');
   if(!upis||upis.length===0){ upiBox.innerHTML='<p style="color:#e74c3c;text-align:center">No UPI configured yet.</p>'; return; }
-  const options=upis.map(u=>`<option value="${u.mobile||u.upi_id}|${u.upi_id}">${u.name} (${u.mobile?'📱'+u.mobile:u.upi_id})</option>`).join('');
+  const recipientOptions=upis.map((u,i)=>`
+    <label style="display:flex;align-items:center;gap:8px;padding:8px;border:1px solid #eee;border-radius:8px;cursor:pointer;margin-bottom:6px">
+      <input type="radio" name="upiRecipient" value="${i}" ${i===0?'checked':''} style="accent-color:var(--accent)">
+      <span><b>${u.name}</b><br><small style="color:#777">${u.upi_id}</small></span>
+    </label>`).join('');
+  const apps=[
+    {name:'GPay',icon:'https://upload.wikimedia.org/wikipedia/commons/thumb/f/f2/Google_Pay_Logo.svg/64px-Google_Pay_Logo.svg.png',pkg:'com.google.android.apps.nbu.paisa.user'},
+    {name:'PhonePe',icon:'https://upload.wikimedia.org/wikipedia/commons/thumb/5/5f/PhonePe_Logo.svg/64px-PhonePe_Logo.svg.png',pkg:'com.phonepe.app'},
+    {name:'Paytm',icon:'https://upload.wikimedia.org/wikipedia/commons/thumb/2/24/Paytm_Logo_%28standalone%29.svg/64px-Paytm_Logo_%28standalone%29.svg.png',pkg:'net.one97.paytm'},
+    {name:'BHIM',icon:'https://upload.wikimedia.org/wikipedia/commons/thumb/6/68/BHIM_svg_logo.svg/64px-BHIM_svg_logo.svg.png',pkg:'in.org.npci.upiapp'},
+  ];
+  const appBtns=apps.map(a=>`
+    <button onclick="launchUPIApp(${total},'${a.pkg}')" style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px 14px;border:1px solid #eee;border-radius:10px;background:#fff;cursor:pointer;min-width:70px">
+      <img src="${a.icon}" style="width:36px;height:36px;object-fit:contain" onerror="this.style.display='none'">
+      <span style="font-size:11px;color:#333">${a.name}</span>
+    </button>`).join('');
   upiBox.innerHTML=`<div style="margin-top:14px;background:#fff8f9;border:1px solid #f0d0d8;border-radius:10px;padding:16px">
     <b style="display:block;margin-bottom:10px;color:#333">💳 Pay ₹${total.toFixed(0)} via UPI</b>
-    <label style="font-size:13px;color:#666;display:block;margin-bottom:6px">Select who to pay:</label>
-    <select id="upiSelect" style="width:100%;padding:10px;border-radius:8px;border:1px solid #ddd;font-size:14px;margin-bottom:12px">${options}</select>
-    <button onclick="launchUPIApp(${total})" style="width:100%;padding:12px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer">
-      Open UPI App to Pay ₹${total.toFixed(0)}
-    </button>
-    <p style="font-size:11px;color:#999;text-align:center;margin-top:8px">Opens GPay, PhonePe, BHIM, Paytm or any UPI app installed on your phone</p>
+    <div style="margin-bottom:12px">${recipientOptions}</div>
+    <b style="font-size:13px;color:#555;display:block;margin-bottom:8px">Choose your UPI app:</b>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">${appBtns}</div>
+    <div style="background:#f0f0f0;border-radius:8px;padding:10px;font-size:12px;color:#555;text-align:center">
+      Or open any UPI app manually and pay to the UPI ID shown above
+    </div>
   </div>`;
 }
 
-function launchUPIApp(total){
-  const sel=document.getElementById('upiSelect');
-  const [selMobile,upiId]=sel.value.includes('|')?sel.value.split('|'):[sel.value,sel.value];
-  const upiName=sel.options[sel.selectedIndex].text.split(' (')[0];
-  const isMobile=/Android|iPhone|iPad/i.test(navigator.userAgent);
-  if(!isMobile){
-    alert('UPI works on mobile only.\n\nPay to: '+upiId+'\nAmount: ₹'+total);
-    return;
-  }
+function launchUPIApp(total, pkg){
+  const radios=document.querySelectorAll('input[name="upiRecipient"]');
+  let selIdx=0;
+  radios.forEach((r,i)=>{ if(r.checked) selIdx=i; });
+  const u=upis[selIdx];
+  if(!u) return;
+  const upiId=u.upi_id;
+  const upiName=u.name;
   const customerName=prompt('Your name (for order tracking):')||'Customer';
   const cartSnapshot=cart.map(c=>({id:c.id,name:c.name,qty:c.qty,price:c.price,note:c.note||''}));
-  // Launch UPI FIRST — must be synchronous/immediate after user tap
-  // Use mobile@upi format — recognised by all UPI apps without risk warning
-  // Extract mobile number if UPI ID is in number@provider format
-  const mobileMatch=selMobile.match(/^(\d{10})$/);
-  const payHandle=mobileMatch?selMobile+'@upi':upiId;
-  const upiParams='pa='+encodeURIComponent(payHandle)+'&pn='+encodeURIComponent('AnVi Collections')+'&am='+total.toFixed(2)+'&cu=INR&tn='+encodeURIComponent('AnVi Collections Order');
-  window.location.href='upi://pay?'+upiParams;
-  // Save order async in background
-  setTimeout(()=>saveOrderAfterUPI(customerName,upiId,upiName,total,cartSnapshot),100);
-  // Clear cart UI
+  const upiParams='pa='+encodeURIComponent(upiId)+'&pn='+encodeURIComponent('AnVi Collections')+'&am='+total.toFixed(2)+'&cu=INR&tn='+encodeURIComponent('AnVi Collections Order');
+  // Use intent:// with specific package for direct app open — most reliable on Android Chrome
+  if(pkg){
+    window.location.href='intent://pay?'+upiParams+'#Intent;scheme=upi;package='+pkg+';end';
+  } else {
+    window.location.href='upi://pay?'+upiParams;
+  }
+  setTimeout(()=>saveOrderAfterUPI(customerName,upiId,upiName,total,cartSnapshot),200);
   cart=[]; updateCartBadge();
   document.getElementById('cartUpiBox').innerHTML='';
   document.getElementById('cartItems').innerHTML='<div style="text-align:center;padding:20px"><div style="font-size:40px">⏳</div><b style="color:#333;display:block;margin:10px 0">Order placed!</b><p style="color:#777;font-size:13px">Complete payment in your UPI app. We will confirm via WhatsApp once verified.</p></div>';
