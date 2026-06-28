@@ -154,9 +154,12 @@ th.sortable:hover{color:var(--accent)}
 </div>
 
 <!-- LIGHTBOX -->
-<div id="lightbox" onclick="closeLightbox()">
-  <span onclick="closeLightbox()">&times;</span>
-  <img id="lightboxImg" src="" alt="">
+<div id="lightbox" onclick="closeLightboxOutside(event)">
+  <span onclick="closeLightbox()" style="z-index:2">&times;</span>
+  <button onclick="lightboxNav(-1)" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);background:rgba(255,255,255,.2);border:none;color:#fff;font-size:32px;cursor:pointer;padding:8px 14px;border-radius:50%">‹</button>
+  <img id="lightboxImg" src="" alt="" style="max-width:90%;max-height:85vh;border-radius:8px;object-fit:contain">
+  <button onclick="lightboxNav(1)" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:rgba(255,255,255,.2);border:none;color:#fff;font-size:32px;cursor:pointer;padding:8px 14px;border-radius:50%">›</button>
+  <div id="lightboxDots" style="position:absolute;bottom:16px;display:flex;gap:6px;justify-content:center;width:100%"></div>
 </div>
 
 <!-- ADMIN PANEL -->
@@ -216,9 +219,14 @@ th.sortable:hover{color:var(--accent)}
         <option value="TR">TR — Traditional</option>
         <option value="CZ">CZ — CZ/Stone</option>
         <option value="L">L — Ladies (Other)</option>
+        <option value="__new__">+ Add New Collection...</option>
       </select>
-      <input type="text" id="pSku" placeholder="SKU (auto-generated)" style="width:160px" readonly>
-      <select id="pCat"><option value="Kids">Kids</option><option value="Ladies">Ladies</option></select>
+      <input type="text" id="pSku" placeholder="SKU (auto-generated)" style="width:160px">
+      <select id="pCat" style="padding:8px;border-radius:6px;border:1px solid #ccc">
+        <option value="Kids">Kids</option>
+        <option value="Ladies">Ladies</option>
+        <option value="__new__">+ Add New Category...</option>
+      </select>
       <input type="text" id="pVendor" placeholder="Vendor">
       <input type="number" id="pStock" placeholder="Stock" style="width:80px">
       <input type="number" id="pWholesale" placeholder="Wholesale ₹" style="width:100px">
@@ -354,6 +362,7 @@ function login(){
     isAdmin=true;
     document.getElementById('publicSite').style.display='none';
     document.getElementById('adminPanel').classList.add('show');
+    initCollectionDropdown(); initCategoryDropdown();
     loadAll();
   } else alert('Invalid credentials');
 }
@@ -375,8 +384,41 @@ function showAPage(id,btn){
 }
 
 /* ---------- LIGHTBOX ---------- */
-function openLightbox(src){ document.getElementById('lightboxImg').src=src; document.getElementById('lightbox').classList.add('show'); }
+let lbImages=[], lbIndex=0, lbTouchX=0;
+function openLightbox(src, productId){
+  // collect all images for this product
+  if(productId){
+    const extra=(productImages[productId]||[]).map(e=>e.img).filter(Boolean);
+    const prod=products.find(p=>p.id===productId);
+    lbImages=[...new Set([(prod&&prod.img)||'',...extra].filter(Boolean))];
+    lbIndex=lbImages.indexOf(src); if(lbIndex<0) lbIndex=0;
+  } else {
+    lbImages=[src]; lbIndex=0;
+  }
+  renderLightbox();
+  document.getElementById('lightbox').classList.add('show');
+}
+function renderLightbox(){
+  document.getElementById('lightboxImg').src=lbImages[lbIndex]||'';
+  const dots=document.getElementById('lightboxDots');
+  if(lbImages.length<=1){ dots.innerHTML=''; return; }
+  dots.innerHTML=lbImages.map((_,i)=>`<div onclick="lbGoTo(${i})" style="width:8px;height:8px;border-radius:50%;background:${i===lbIndex?'#fff':'rgba(255,255,255,.4)'};cursor:pointer"></div>`).join('');
+}
+function lbGoTo(i){ lbIndex=i; renderLightbox(); }
+function lightboxNav(dir){
+  lbIndex=(lbIndex+dir+lbImages.length)%lbImages.length;
+  renderLightbox();
+}
 function closeLightbox(){ document.getElementById('lightbox').classList.remove('show'); }
+function closeLightboxOutside(e){ if(e.target===document.getElementById('lightbox')) closeLightbox(); }
+// lightbox touch swipe
+document.addEventListener('touchstart',e=>{ lbTouchX=e.touches[0].clientX; },{passive:true});
+document.addEventListener('touchend',e=>{
+  const lb=document.getElementById('lightbox');
+  if(!lb.classList.contains('show')) return;
+  const diff=lbTouchX-e.changedTouches[0].clientX;
+  if(Math.abs(diff)>50) lightboxNav(diff>0?1:-1);
+},{passive:true});
 
 
 const sortState={};
@@ -625,15 +667,66 @@ async function uploadProductImages(productId, files){
   }
   st.textContent='';
 }
-async function deleteProductImage(imgId, path){
+async function deleteProductImage(imgId){
+  // find path from loaded data
+  let foundPath='';
+  for(const pid in productImages){
+    const img=productImages[pid].find(x=>x.id===imgId);
+    if(img){foundPath=img.path||'';break;}
+  }
   await sb.from('product_images').delete().eq('id',imgId);
-  if(path) await sb.storage.from('Earrings').remove([path]);
+  if(foundPath) await sb.storage.from('Earrings').remove([foundPath]);
   await loadProductImages(); renderInv(); render();
+  if(editProductId) editProduct(editProductId);
 }
 function previewSku(){
-  const col=document.getElementById('pCollection').value;
+  const colSel=document.getElementById('pCollection');
+  if(colSel.value==='__new__'){
+    const name=prompt('Collection name (e.g. Chokers):'); if(!name){colSel.value='L';return;}
+    const code=prompt('Short code (e.g. CH):'); if(!code){colSel.value='L';return;}
+    // save to localStorage for persistence
+    const custom=JSON.parse(localStorage.getItem('av_collections')||'[]');
+    custom.push({code:code.toUpperCase(),name});
+    localStorage.setItem('av_collections',JSON.stringify(custom));
+    const opt=document.createElement('option');
+    opt.value=code.toUpperCase(); opt.textContent=code.toUpperCase()+' — '+name;
+    colSel.insertBefore(opt,colSel.querySelector('[value="__new__"]'));
+    colSel.value=code.toUpperCase();
+  }
+  const col=colSel.value;
   const count=products.filter(p=>p.sku&&p.sku.startsWith('AV-'+col+'-')).length+1;
   document.getElementById('pSku').value='AV-'+col+'-'+String(count).padStart(3,'0')+'-001';
+}
+function initCollectionDropdown(){
+  const sel=document.getElementById('pCollection'); if(!sel)return;
+  const custom=JSON.parse(localStorage.getItem('av_collections')||'[]');
+  custom.forEach(c=>{
+    if(![...sel.options].find(o=>o.value===c.code)){
+      const opt=document.createElement('option');
+      opt.value=c.code; opt.textContent=c.code+' — '+c.name;
+      sel.insertBefore(opt,sel.querySelector('[value="__new__"]'));
+    }
+  });
+}
+function initCategoryDropdown(){
+  const sel=document.getElementById('pCat'); if(!sel)return;
+  const custom=JSON.parse(localStorage.getItem('av_categories')||'[]');
+  custom.forEach(c=>{
+    if(![...sel.options].find(o=>o.value===c)){
+      const opt=document.createElement('option'); opt.value=c; opt.textContent=c;
+      sel.insertBefore(opt,sel.querySelector('[value="__new__"]'));
+    }
+  });
+  sel.onchange=function(){
+    if(this.value==='__new__'){
+      const name=prompt('New category name:'); if(!name){this.value='Ladies';return;}
+      const cats=JSON.parse(localStorage.getItem('av_categories')||'[]');
+      cats.push(name); localStorage.setItem('av_categories',JSON.stringify(cats));
+      const opt=document.createElement('option'); opt.value=name; opt.textContent=name;
+      sel.insertBefore(opt,sel.querySelector('[value="__new__"]'));
+      this.value=name;
+    }
+  };
 }
 
 async function addProduct(){
@@ -662,11 +755,11 @@ async function addProduct(){
     const oldName=wasEdit?(products.find(p=>p.id===editProductId)||{}).name:null;
     let productId=editProductId;
     if(editProductId){
-      // on edit: don't replace primary img — add ALL new files to product_images
       const payload={sku,name,category:cat,vendor,stock,wholesale,selling,img,path};
       const {error}=await sb.from('products').update(payload).eq('id',editProductId);
       if(error) throw error;
       if(oldName && oldName!==name) await sb.from('sales').update({name}).eq('name',oldName);
+      // ALL new files go to product_images only — never replace primary on edit
       if(files.length>0) await uploadProductImages(editProductId,[...files]);
     } else {
       // on new: file[0] = primary, rest go to product_images
@@ -720,7 +813,7 @@ function editProduct(id){
     </div>`;
     html+=extra.map(img=>`<div class="img-thumb">
       <img src="${img.img}">
-      <button class="del" onclick="deleteProductImage(${img.id},'${img.path||''}')">✕</button>
+      <button class="del" onclick="deleteProductImage(${img.id})">✕</button>
     </div>`).join('');
     thumbsEl.innerHTML=html||'<small style="color:var(--muted)">No images yet</small>';
   }
@@ -1066,14 +1159,12 @@ function renderUpiPublic(){
 }
 
 function buildGallery(item){
-  const extra=productImages[item.id]||[];
-  const imgs=[];
-  if(item.img) imgs.push(item.img);
-  extra.forEach(e=>{ if(e.img && !imgs.includes(e.img)) imgs.push(e.img); });
+  const extra=(productImages[item.id]||[]).map(e=>e.img).filter(Boolean);
+  const imgs=[...new Set([item.img,...extra].filter(Boolean))];
   if(imgs.length===0) return `<div class="img-gallery" style="background:#f0e0e8;display:flex;align-items:center;justify-content:center"><span style="color:#c9788d;font-size:30px">👑</span></div>`;
-  if(imgs.length===1) return `<div class="img-gallery"><div class="slides"><img src="${imgs[0]}" alt="${item.name}" onclick="openLightbox('${imgs[0]}')"></div></div>`;
+  if(imgs.length===1) return `<div class="img-gallery"><div class="slides"><img src="${imgs[0]}" alt="${item.name}" onclick="openLightbox('${imgs[0]}',${item.id})"></div></div>`;
   const uid='g'+item.id;
-  const slides=imgs.map(src=>`<img src="${src}" alt="${item.name}" onclick="openLightbox('${src}')">`).join('');
+  const slides=imgs.map(src=>`<img src="${src}" alt="${item.name}" onclick="openLightbox('${src}',${item.id})">`).join('');
   const dots=imgs.map((_,i)=>`<div class="dot${i===0?' active':''}" id="${uid}d${i}"></div>`).join('');
   return `<div class="img-gallery" id="${uid}">
     <div class="slides" id="${uid}s">${slides}</div>
@@ -1105,10 +1196,12 @@ function startAutoSwipe(){
     });
   },3000);
 }
-// touch swipe for gallery
+// touch swipe for gallery cards
 let touchStartX=0;
 document.addEventListener('touchstart',e=>{ touchStartX=e.touches[0].clientX; },{passive:true});
 document.addEventListener('touchend',e=>{
+  const lb=document.getElementById('lightbox');
+  if(lb&&lb.classList.contains('show')) return; // handled by lightbox
   const diff=touchStartX-e.changedTouches[0].clientX;
   if(Math.abs(diff)<50) return;
   const gallery=e.target.closest('.img-gallery');
