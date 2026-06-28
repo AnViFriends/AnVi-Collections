@@ -232,6 +232,7 @@ th.sortable:hover{color:var(--accent)}
       <input type="number" id="pWholesale" placeholder="Wholesale ₹" style="width:100px">
       <input type="number" id="pSelling" placeholder="Selling ₹" style="width:90px">
       <input type="file" id="pImg" accept="image/*" multiple>
+      <span id="pImgHint" style="font-size:11px;color:var(--muted)">Select images to upload</span>
       <button class="btn" id="pSubmitBtn" onclick="addProduct()">Add Product</button>
       <button class="btn sm" id="pCancelBtn" onclick="cancelEditProduct()" style="display:none;background:#888">Cancel</button>
       <span id="invStatus" style="font-size:12px;color:var(--muted)"></span>
@@ -755,12 +756,23 @@ async function addProduct(){
     const oldName=wasEdit?(products.find(p=>p.id===editProductId)||{}).name:null;
     let productId=editProductId;
     if(editProductId){
+      let filesToExtra=[...files];
+      // if no primary image yet, promote first file to primary
+      if(!img && files.length>0){
+        st.textContent='Uploading primary image...';
+        const fname=Date.now()+'_'+files[0].name.replace(/\s+/g,'_');
+        const {error:upErr}=await sb.storage.from('Earrings').upload(fname,files[0]);
+        if(upErr) throw upErr;
+        img=sb.storage.from('Earrings').getPublicUrl(fname).data.publicUrl;
+        path=fname;
+        filesToExtra=filesToExtra.slice(1);
+      }
       const payload={sku,name,category:cat,vendor,stock,wholesale,selling,img,path};
       const {error}=await sb.from('products').update(payload).eq('id',editProductId);
       if(error) throw error;
       if(oldName && oldName!==name) await sb.from('sales').update({name}).eq('name',oldName);
-      // ALL new files go to product_images only — never replace primary on edit
-      if(files.length>0) await uploadProductImages(editProductId,[...files]);
+      // remaining files go to product_images
+      if(filesToExtra.length>0) await uploadProductImages(editProductId,filesToExtra);
     } else {
       // on new: file[0] = primary, rest go to product_images
       if(files.length>0){
@@ -802,6 +814,8 @@ function editProduct(id){
   document.getElementById('pSku').value=p.sku||'';
   document.getElementById('pCancelBtn').style.display='inline-block';
   document.getElementById('invStatus').textContent='Choose new files to add more images. Existing shown below.';
+  const hint=document.getElementById('pImgHint');
+  if(hint) hint.textContent=p.img?'Add more images (existing kept)':'Upload first image for this product';
   const thumbsEl=document.getElementById('pImgThumbs');
   if(thumbsEl){
     const extra=productImages[id]||[];
@@ -836,6 +850,8 @@ function cancelEditProduct(){
   document.getElementById('pCancelBtn').style.display='none';
   document.getElementById('invStatus').textContent='';
   document.getElementById('pImgThumbs').innerHTML='';
+  const hint=document.getElementById('pImgHint');
+  if(hint) hint.textContent='Select images to upload';
 }
 async function deleteProduct(id,path){
   if(!confirm('Delete this product?'))return;
@@ -848,7 +864,7 @@ async function deleteProduct(id,path){
 function renderInv(){
   document.getElementById('invTable').innerHTML = products.map((p,i)=>`<tr>
     <td style="color:var(--muted);font-size:12px">${i+1}</td>
-    <td>${p.img?'<img src="'+p.img+'" style="width:40px;height:40px;object-fit:cover;border-radius:4px">':''}</td>
+    <td>${firstImage(p)?'<img src="'+firstImage(p)+'" style="width:40px;height:40px;object-fit:cover;border-radius:4px">':''}</td>
     <td>${p.sku||'—'}</td><td>${p.name}</td><td>${p.category||''}</td><td>${p.vendor||''}</td>
     <td>${p.stock}</td><td>₹${p.wholesale}</td><td>₹${p.selling}</td>
     <td><div class="actions"><button class="btn sm" onclick="editProduct(${p.id})">Edit</button><button class="btn sm danger" onclick="deleteProduct(${p.id},'${p.path||''}')">Delete</button></div></td></tr>`).join('') || '<tr><td colspan="10">No products</td></tr>';
@@ -1160,8 +1176,8 @@ function renderUpiPublic(){
 
 function buildGallery(item){
   const extra=(productImages[item.id]||[]).map(e=>e.img).filter(Boolean);
-  const imgs=[...new Set([item.img,...extra].filter(Boolean))];
-  if(imgs.length===0) return `<div class="img-gallery" style="background:#f0e0e8;display:flex;align-items:center;justify-content:center"><span style="color:#c9788d;font-size:30px">👑</span></div>`;
+  const imgs=[...new Set([item.img,...extra].filter(src=>src&&src.trim()!=''))];
+  if(imgs.length===0) return `<div class="img-gallery" style="background:#f0e0e8;display:flex;align-items:center;justify-content:center;height:180px"><span style="color:#c9788d;font-size:30px">👑</span></div>`;
   if(imgs.length===1) return `<div class="img-gallery"><div class="slides"><img src="${imgs[0]}" alt="${item.name}" onclick="openLightbox('${imgs[0]}',${item.id})"></div></div>`;
   const uid='g'+item.id;
   const slides=imgs.map(src=>`<img src="${src}" alt="${item.name}" onclick="openLightbox('${src}',${item.id})">`).join('');
@@ -1172,6 +1188,11 @@ function buildGallery(item){
     <button class="nav next" onclick="slideGallery('${uid}',${imgs.length},1)">›</button>
     <div class="dots">${dots}</div>
   </div>`;
+}
+function firstImage(item){
+  if(item.img) return item.img;
+  const extra=productImages[item.id]||[];
+  return extra.length>0?extra[0].img:'';
 }
 const galleryIdx={};
 function slideGallery(uid,total,dir){
@@ -1381,7 +1402,13 @@ async function launchUPIApp(total){
   render();
   // now launch UPI app
   const upiUrl='upi://pay?pa='+encodeURIComponent(upiId)+'&pn='+encodeURIComponent('AnVi Collections')+'&am='+total.toFixed(2)+'&cu=INR&tn='+encodeURIComponent('AnVi Collections Order');
-  window.location.href=upiUrl;
+  // Use anchor click — more reliable than window.location.href in Chrome
+  const a=document.createElement('a');
+  a.href=upiUrl;
+  a.style.display='none';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(()=>document.body.removeChild(a),1000);
 }
 
 async function confirmCartOrder(upiId, payTo, total){} // kept for compatibility
