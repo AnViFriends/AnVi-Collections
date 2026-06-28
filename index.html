@@ -1369,56 +1369,39 @@ function checkoutUPI(){
   </div>`;
 }
 
-async function launchUPIApp(total){
+function launchUPIApp(total){
   const sel=document.getElementById('upiSelect');
   const upiId=sel.value;
   const upiName=sel.options[sel.selectedIndex].text.split(' (')[0];
   const isMobile=/Android|iPhone|iPad/i.test(navigator.userAgent);
   if(!isMobile){
-    alert('UPI app payment only works on mobile.\n\nUPI ID to pay manually:\n'+upiId);
+    alert('UPI works on mobile only.\n\nPay to: '+upiId+'\nAmount: ₹'+total);
     return;
   }
-  // collect name first before navigating away
-  const customerName=prompt('Your name (for order tracking):') || 'Customer';
-  const items=cart.map(c=>({id:c.id,name:c.name,qty:c.qty,price:c.price,note:c.note||''}));
-  // save pending order
-  await sb.from('pending_orders').insert({
-    date:new Date().toISOString().slice(0,10),
-    customer_name:customerName,
-    items:JSON.stringify(items),
-    total,
-    payment_mode:'UPI',
-    paid_to:upiName,
-    status:'pending',
-    note:'UPI ID: '+upiId
-  });
-  notifyAdmin('🛍 New pending order from '+customerName+' — ₹'+total+' via UPI to '+upiName+'. Verify & confirm in Admin → Orders.');
-  // clear cart UI
+  const customerName=prompt('Your name (for order tracking):')||'Customer';
+  const cartSnapshot=cart.map(c=>({id:c.id,name:c.name,qty:c.qty,price:c.price,note:c.note||''}));
+  // Launch UPI FIRST — must be synchronous/immediate after user tap
+  const upiParams='pa='+encodeURIComponent(upiId)+'&pn='+encodeURIComponent('AnVi Collections')+'&am='+total.toFixed(2)+'&cu=INR&tn='+encodeURIComponent('AnVi Collections Order');
+  window.location.href='upi://pay?'+upiParams;
+  // Save order async in background
+  setTimeout(()=>saveOrderAfterUPI(customerName,upiId,upiName,total,cartSnapshot),100);
+  // Clear cart UI
   cart=[]; updateCartBadge();
   document.getElementById('cartUpiBox').innerHTML='';
-  document.getElementById('cartItems').innerHTML=`
-    <div style="text-align:center;padding:20px">
-      <div style="font-size:40px">⏳</div>
-      <b style="color:#333;display:block;margin:10px 0">Order placed — completing payment...</b>
-      <p style="color:#777;font-size:13px">Opening your UPI app. Once paid, we'll confirm your order via WhatsApp.</p>
-    </div>`;
+  document.getElementById('cartItems').innerHTML='<div style="text-align:center;padding:20px"><div style="font-size:40px">⏳</div><b style="color:#333;display:block;margin:10px 0">Order placed!</b><p style="color:#777;font-size:13px">Complete payment in your UPI app. We will confirm via WhatsApp once verified.</p></div>';
   document.getElementById('cartTotal').textContent='';
   document.getElementById('cartActions').style.display='none';
   render();
-  // now launch UPI app - use intent:// for Android Chrome reliability
-  const upiParams='pa='+encodeURIComponent(upiId)+'&pn='+encodeURIComponent('AnVi Collections')+'&am='+total.toFixed(2)+'&cu=INR&tn='+encodeURIComponent('AnVi Collections Order');
-  const isAndroid=/Android/i.test(navigator.userAgent);
-  const isIOS=/iPhone|iPad/i.test(navigator.userAgent);
-  let upiUrl;
-  if(isAndroid){
-    // intent URL works in Chrome Android without being blocked
-    upiUrl='intent://pay?'+upiParams+'#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;S.browser_fallback_url=https://pay.google.com;end';
-    // also try generic upi:// as fallback via window.open
-    window.open('upi://pay?'+upiParams,'_blank');
-  } else if(isIOS){
-    upiUrl='upi://pay?'+upiParams;
-    window.location.href=upiUrl;
-  }
+}
+async function saveOrderAfterUPI(customerName,upiId,upiName,total,items){
+  try{
+    await sb.from('pending_orders').insert({
+      date:new Date().toISOString().slice(0,10),
+      customer_name:customerName,items:JSON.stringify(items),
+      total,payment_mode:'UPI',paid_to:upiName,status:'pending',note:'UPI ID: '+upiId
+    });
+    notifyAdmin('🛍 Pending order from '+customerName+' — ₹'+total+' to '+upiName);
+  }catch(e){console.error('Order save:',e);}
 }
 
 async function confirmCartOrder(upiId, payTo, total){} // kept for compatibility
