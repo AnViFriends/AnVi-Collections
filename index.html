@@ -322,8 +322,9 @@ th.sortable:hover{color:var(--accent)}
   <!-- UPI -->
   <div class="apage" id="apage-upi">
     <div class="formrow">
-      <input type="text" id="uName" placeholder="Friendly name">
-      <input type="text" id="uId" placeholder="UPI ID e.g. anvi@oksbi">
+      <input type="text" id="uName" placeholder="Friendly name (e.g. Anitha)">
+      <input type="text" id="uMobile" placeholder="Mobile number (10 digits)">
+      <input type="text" id="uId" placeholder="UPI ID e.g. 9790531188@ybl">
       <label style="color:var(--text)"><input type="checkbox" id="uDefault"> Set as default (shown to customers)</label>
       <button class="btn" onclick="addUpi()">Add UPI</button>
     </div>
@@ -1142,14 +1143,17 @@ async function editExpense(id){
 /* ---------- UPI ---------- */
 async function addUpi(){
   const name=document.getElementById('uName').value.trim();
-  const upi_id=document.getElementById('uId').value.trim();
+  const mobile=(document.getElementById('uMobile')||{value:''}).value.trim();
+  const upi_id=document.getElementById('uId').value.trim()||mobile+'@upi';
   const is_default=document.getElementById('uDefault').checked;
-  if(!name||!upi_id){alert('Name and UPI ID required');return}
+  if(!name||!upi_id){alert('Name and mobile/UPI ID required');return}
   if(is_default){ await sb.from('upi').update({is_default:false}).neq('id',0); }
-  await sb.from('upi').insert({name,upi_id,is_default});
-  notifyAdmin('New UPI added: '+name+' ('+upi_id+')'+(is_default?' [Set as Default]':''));
-  document.getElementById('uName').value=''; document.getElementById('uId').value=''; document.getElementById('uDefault').checked=false;
-  await loadUpi(); renderUpi(); 
+  await sb.from('upi').insert({name,upi_id,mobile:mobile||'',is_default});
+  notifyAdmin('New UPI added: '+name+' ('+upi_id+')'+(is_default?' [Default]':''));
+  document.getElementById('uName').value='';
+  if(document.getElementById('uMobile')) document.getElementById('uMobile').value='';
+  document.getElementById('uId').value=''; document.getElementById('uDefault').checked=false;
+  await loadUpi(); renderUpi();
 }
 async function deleteUpi(id){
   if(!confirm('Delete this UPI?'))return;
@@ -1357,7 +1361,7 @@ function checkoutUPI(){
   const total=cart.reduce((s,c)=>s+(c.price*c.qty),0);
   const upiBox=document.getElementById('cartUpiBox');
   if(!upis||upis.length===0){ upiBox.innerHTML='<p style="color:#e74c3c;text-align:center">No UPI configured yet.</p>'; return; }
-  const options=upis.map(u=>`<option value="${u.upi_id}">${u.name} (${u.upi_id})</option>`).join('');
+  const options=upis.map(u=>`<option value="${u.mobile||u.upi_id}|${u.upi_id}">${u.name} (${u.mobile?'📱'+u.mobile:u.upi_id})</option>`).join('');
   upiBox.innerHTML=`<div style="margin-top:14px;background:#fff8f9;border:1px solid #f0d0d8;border-radius:10px;padding:16px">
     <b style="display:block;margin-bottom:10px;color:#333">💳 Pay ₹${total.toFixed(0)} via UPI</b>
     <label style="font-size:13px;color:#666;display:block;margin-bottom:6px">Select who to pay:</label>
@@ -1371,7 +1375,7 @@ function checkoutUPI(){
 
 function launchUPIApp(total){
   const sel=document.getElementById('upiSelect');
-  const upiId=sel.value;
+  const [selMobile,upiId]=sel.value.includes('|')?sel.value.split('|'):[sel.value,sel.value];
   const upiName=sel.options[sel.selectedIndex].text.split(' (')[0];
   const isMobile=/Android|iPhone|iPad/i.test(navigator.userAgent);
   if(!isMobile){
@@ -1381,7 +1385,11 @@ function launchUPIApp(total){
   const customerName=prompt('Your name (for order tracking):')||'Customer';
   const cartSnapshot=cart.map(c=>({id:c.id,name:c.name,qty:c.qty,price:c.price,note:c.note||''}));
   // Launch UPI FIRST — must be synchronous/immediate after user tap
-  const upiParams='pa='+encodeURIComponent(upiId)+'&pn='+encodeURIComponent('AnVi Collections')+'&am='+total.toFixed(2)+'&cu=INR&tn='+encodeURIComponent('AnVi Collections Order');
+  // Use mobile@upi format — recognised by all UPI apps without risk warning
+  // Extract mobile number if UPI ID is in number@provider format
+  const mobileMatch=selMobile.match(/^(\d{10})$/);
+  const payHandle=mobileMatch?selMobile+'@upi':upiId;
+  const upiParams='pa='+encodeURIComponent(payHandle)+'&pn='+encodeURIComponent('AnVi Collections')+'&am='+total.toFixed(2)+'&cu=INR&tn='+encodeURIComponent('AnVi Collections Order');
   window.location.href='upi://pay?'+upiParams;
   // Save order async in background
   setTimeout(()=>saveOrderAfterUPI(customerName,upiId,upiName,total,cartSnapshot),100);
