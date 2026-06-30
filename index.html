@@ -323,14 +323,14 @@ th.sortable:hover{color:var(--accent)}
   <div class="apage" id="apage-upi">
     <div class="formrow">
       <input type="text" id="uName" placeholder="Friendly name (e.g. Anitha)">
-      <input type="text" id="uMobile" placeholder="Mobile number (10 digits)">
-      <input type="text" id="uId" placeholder="UPI ID e.g. 9790531188@ybl">
+      <input type="text" id="uMobile" placeholder="Mobile number (10 digits) — required">
+      <input type="text" id="uId" placeholder="UPI ID (optional, internal use)">
       <input type="file" id="uQrImg" accept="image/*">
       <label style="font-size:12px;color:var(--muted)">Upload your UPI QR image</label>
       <label style="color:var(--text)"><input type="checkbox" id="uDefault"> Set as default</label>
       <button class="btn" onclick="addUpi()">Add UPI</button>
     </div>
-    <table><thead><tr><th>Name</th><th>UPI ID</th><th>QR</th><th>Default</th><th>Action</th></tr></thead>
+    <table><thead><tr><th>Name</th><th>Mobile</th><th>QR</th><th>Default</th><th>Action</th></tr></thead>
     <tbody id="upiTable"></tbody></table>
   </div>
 
@@ -1149,7 +1149,7 @@ async function addUpi(){
   const upi_id=document.getElementById('uId').value.trim();
   const is_default=document.getElementById('uDefault').checked;
   const qrFile=document.getElementById('uQrImg').files[0];
-  if(!name){alert('Name required');return}
+  if(!name||!mobile){alert('Name and mobile number required');return}
   let qr_img='';
   if(qrFile){
     const fname='qr_'+Date.now()+'_'+qrFile.name.replace(/\s+/g,'_');
@@ -1157,8 +1157,8 @@ async function addUpi(){
     if(!upErr) qr_img=sb.storage.from('Earrings').getPublicUrl(fname).data.publicUrl;
   }
   if(is_default){ await sb.from('upi').update({is_default:false}).neq('id',0); }
-  await sb.from('upi').insert({name,upi_id:upi_id||mobile,mobile:mobile||'',is_default,qr_img});
-  notifyAdmin('New UPI added: '+name+(is_default?' [Default]':''));
+  await sb.from('upi').insert({name,upi_id:upi_id||'',mobile,is_default,qr_img});
+  notifyAdmin('New UPI added: '+name+' ('+mobile+')'+(is_default?' [Default]':''));
   document.getElementById('uName').value='';
   document.getElementById('uMobile').value='';
   document.getElementById('uId').value='';
@@ -1173,7 +1173,7 @@ async function deleteUpi(id){
 }
 function renderUpi(){
   document.getElementById('upiTable').innerHTML = upis.map(u=>`<tr>
-    <td>${u.name}</td><td>${u.upi_id||u.mobile||'—'}</td>
+    <td>${u.name}</td><td>📱 ${u.mobile||'—'}</td>
     <td>${u.qr_img?`<img src="${u.qr_img}" style="width:50px;height:50px;object-fit:contain;border-radius:4px">`:'—'}</td>
     <td>${u.is_default?'✅':''}</td>
     <td><div class="actions"><button class="btn sm" onclick="editUpi(${u.id})">Edit</button><button class="btn sm danger" onclick="deleteUpi(${u.id})">Delete</button></div></td></tr>`).join('') || '<tr><td colspan="5">No UPI accounts</td></tr>';
@@ -1182,11 +1182,12 @@ async function editUpi(id){
   const u=upis.find(x=>x.id===id); if(!u)return;
   const name=prompt('Name:',u.name||'');
   if(name===null)return;
-  const upi_id=prompt('UPI ID:',u.upi_id||'');
+  const mobile=prompt('Mobile number:',u.mobile||'');
+  if(mobile===null)return;
   const setDefault=confirm('Set as default UPI shown to customers?');
   if(setDefault){ await sb.from('upi').update({is_default:false}).neq('id',0); }
-  await sb.from('upi').update({name,upi_id,is_default:setDefault}).eq('id',id);
-  await loadUpi(); renderUpi(); 
+  await sb.from('upi').update({name,mobile,is_default:setDefault}).eq('id',id);
+  await loadUpi(); renderUpi();
 }
 function renderUpiPublic(){
   const def = upis.find(u=>u.is_default) || upis[0];
@@ -1379,21 +1380,22 @@ function checkoutUPI(){
         <div style="font-size:11px;color:#999">📱 Search this number in your UPI app</div>
         <div style="font-size:15px;color:#333;font-weight:700">${u.mobile}</div>
         <button onclick="copyUpiId('${u.mobile}',this)" style="margin-top:4px;padding:7px 12px;background:var(--accent);color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer">📋 Copy Number</button>
-      </div>`:'';
-    const upiIdBlock=u.upi_id?`<div style="margin-top:8px;padding-top:8px;border-top:1px solid #eee">
-        <div style="font-size:10px;color:#aaa">UPI ID (alternative)</div>
-        <div style="font-size:12px;color:#777;word-break:break-all">${u.upi_id}</div>
-        <button onclick="copyUpiId('${u.upi_id}',this)" style="margin-top:4px;padding:5px 10px;background:#eee;color:#555;border:none;border-radius:6px;font-size:11px;cursor:pointer">📋 Copy UPI ID</button>
-      </div>`:'';
+      </div>`:'<div style="font-size:12px;color:#e74c3c">No mobile number set</div>';
     return `<div style="text-align:center;border:2px solid #f0d0d8;border-radius:12px;padding:14px;flex:1;min-width:170px;background:#fff">
       <b style="display:block;margin-bottom:4px;color:#333;font-size:15px">${u.name}</b>
       ${qrBlock}
       ${mobileBlock}
-      ${upiIdBlock}
     </div>`;
   }).join('');
   upiBox.innerHTML=`<div style="margin-top:14px;background:#fff8f9;border:1px solid #f0d0d8;border-radius:10px;padding:16px">
-    <b style="display:block;margin-bottom:10px;color:#333">UPI Details</b>
+    <b style="display:block;margin-bottom:6px;color:#333">UPI Details</b>
+    <div style="background:#fff;border-radius:8px;padding:10px;margin-bottom:12px;font-size:12px;color:#555;line-height:1.6">
+      <b>How to pay:</b><br>
+      1️⃣ Tap "Copy Number" below<br>
+      2️⃣ Open GPay / PhonePe / Paytm<br>
+      3️⃣ Tap "Pay Phone Number" / Search icon<br>
+      4️⃣ Paste number → Enter amount → Pay
+    </div>
     <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center">${payCards}</div>
   </div>`;
 }
