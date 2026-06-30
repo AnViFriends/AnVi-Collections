@@ -1374,45 +1374,27 @@ function checkoutUPI(){
   const total=cart.reduce((s,c)=>s+(c.price*c.qty),0);
   const upiBox=document.getElementById('cartUpiBox');
   if(!upis||upis.length===0){ upiBox.innerHTML='<p style="color:#e74c3c;text-align:center">No UPI configured yet.</p>'; return; }
-  const qrCards=upis.map((u,idx)=>{
-    // Use uploaded QR image if available, else generate from UPI ID
-    const qrSrc=u.qr_img||('https://api.qrserver.com/v1/create-qr-code/?size=200x200&data='+encodeURIComponent('upi://pay?pa='+encodeURIComponent(u.upi_id)+'&pn=AnVi+Collections&am='+total.toFixed(2)+'&cu=INR'));
-    const waMsg=encodeURIComponent('Hi AnVi Collections!\n\nI want to place an order:\n'
-      +cart.map(c=>'• '+c.name+' x'+c.qty+' = ₹'+(c.price*c.qty).toFixed(0)).join('\n')
-      +'\n\nTotal: ₹'+total.toFixed(0)
-      +'\n\nPaying to: '+u.name
-      +'\n\nPlease confirm my order.');
+  const itemLines=cart.map(c=>'• '+c.name+' x'+c.qty+' = ₹'+(c.price*c.qty).toFixed(0)).join('\n');
+  const payCards=upis.map(u=>{
+    const detail=u.upi_id?u.upi_id:(u.mobile?'📱 '+u.mobile:'');
+    const qrBlock=u.qr_img?`<img src="${u.qr_img}" style="width:150px;height:150px;object-fit:contain;border-radius:8px;cursor:pointer;margin:8px 0" onclick="openLightbox('${u.qr_img}')" alt="QR"><div style="font-size:11px;color:#999">Tap QR to zoom & scan</div>`:'';
+    const waMsg=encodeURIComponent('Hi AnVi Collections! 🛍️\n\nMy order:\n'+itemLines+'\n\nTotal: ₹'+total.toFixed(0)+'\n\nPaying to: '+u.name+' ('+detail+')\n\nI will send the payment screenshot here once paid.');
     return `<div style="text-align:center;border:2px solid #f0d0d8;border-radius:12px;padding:14px;flex:1;min-width:160px;background:#fff">
-      <b style="display:block;margin-bottom:6px;color:#333">Pay to ${u.name}</b>
-      <img src="${qrSrc}" style="width:180px;height:180px;object-fit:contain;border-radius:8px;cursor:pointer" onclick="openLightbox('${qrSrc}')" alt="UPI QR">
-      <div style="font-size:11px;color:#777;margin-top:4px">Tap QR to zoom</div>
-      <div style="font-size:13px;font-weight:700;color:var(--accent);margin-top:4px">₹${total.toFixed(0)}</div>
+      <b style="display:block;margin-bottom:4px;color:#333;font-size:15px">${u.name}</b>
+      <div style="font-size:13px;color:#555;font-weight:600;margin:4px 0">${detail}</div>
+      ${qrBlock}
+      <div style="font-size:14px;font-weight:700;color:var(--accent);margin:6px 0">Amount: ₹${total.toFixed(0)}</div>
       <a href="https://wa.me/919790531188?text=${waMsg}" target="_blank"
-        style="display:block;margin-top:10px;padding:10px;background:#25D366;color:#fff;border-radius:8px;font-weight:700;font-size:13px;text-decoration:none">
-        📱 Send Order via WhatsApp
+        style="display:block;margin-top:8px;padding:11px;background:#25D366;color:#fff;border-radius:8px;font-weight:700;font-size:13px;text-decoration:none">
+        📱 Order & Pay via WhatsApp
       </a>
     </div>`;
   }).join('');
   upiBox.innerHTML=`<div style="margin-top:14px;background:#fff8f9;border:1px solid #f0d0d8;border-radius:10px;padding:16px">
-    <b style="display:block;margin-bottom:4px;color:#333">💳 Pay ₹${total.toFixed(0)} via UPI</b>
-    <p style="font-size:12px;color:#888;margin-bottom:12px">1. Scan QR in GPay/PhonePe/Paytm → Pay<br>2. Click WhatsApp button → Send order details to us</p>
-    <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-bottom:14px">${qrCards}</div>
-    <button onclick="recordUPIOrder(${total})" style="width:100%;padding:10px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">
-      ✅ Done — I have paid & sent WhatsApp message
-    </button>
+    <b style="display:block;margin-bottom:4px;color:#333">💳 Pay ₹${total.toFixed(0)}</b>
+    <p style="font-size:12px;color:#888;margin-bottom:12px">Pay using the UPI ID/number/QR shown below in your UPI app, then tap the WhatsApp button to send your order & confirm payment.</p>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center">${payCards}</div>
   </div>`;
-}
-
-function recordUPIOrder(total){
-  const customerName=prompt('Your name (for order tracking):')||'Customer';
-  const cartSnapshot=cart.map(c=>({id:c.id,name:c.name,qty:c.qty,price:c.price,note:c.note||''}));
-  saveOrderAfterUPI(customerName,'QR Scan','UPI QR',total,cartSnapshot);
-  cart=[]; updateCartBadge();
-  document.getElementById('cartUpiBox').innerHTML='';
-  document.getElementById('cartItems').innerHTML='<div style="text-align:center;padding:20px"><div style="font-size:40px">⏳</div><b style="color:#333;display:block;margin:10px 0">Order placed!</b><p style="color:#777;font-size:13px">We will verify your payment and confirm via WhatsApp shortly.</p></div>';
-  document.getElementById('cartTotal').textContent='';
-  document.getElementById('cartActions').style.display='none';
-  render();
 }
 async function saveOrderAfterUPI(customerName,upiId,upiName,total,items){
   try{
