@@ -1370,6 +1370,9 @@ function checkoutWhatsApp(){
     ?'https://wa.me/919790531188?text='+encoded
     :'https://web.whatsapp.com/send?phone=919790531188&text='+encoded;
   window.open(url,'_blank');
+  // save as pending order so admin can track & confirm
+  const cartSnapshot=cart.map(c=>({id:c.id,name:c.name,qty:c.qty,price:c.price,note:c.note||''}));
+  saveOrderAfterUPI('WhatsApp Customer','—','WhatsApp',total,cartSnapshot);
 }
 function checkoutUPI(){
   const upiBox=document.getElementById('cartUpiBox');
