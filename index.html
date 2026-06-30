@@ -146,7 +146,7 @@ th.sortable:hover{color:var(--accent)}
     <div id="cartUpiBox"></div>
     <div class="cart-actions" id="cartActions" style="display:none">
       <button class="wa-btn" onclick="checkoutWhatsApp()">📱 Order via WhatsApp</button>
-      <button class="upi-btn" onclick="checkoutUPI()">💳 Pay via UPI</button>
+      <button class="upi-btn" onclick="checkoutUPI()">💳 View UPI Details</button>
       <button class="clear-btn" onclick="clearCart()">🗑 Clear</button>
     </div>
   </div>
@@ -1371,30 +1371,28 @@ function checkoutWhatsApp(){
   window.open(url,'_blank');
 }
 function checkoutUPI(){
-  const total=cart.reduce((s,c)=>s+(c.price*c.qty),0);
   const upiBox=document.getElementById('cartUpiBox');
   if(!upis||upis.length===0){ upiBox.innerHTML='<p style="color:#e74c3c;text-align:center">No UPI configured yet.</p>'; return; }
-  const itemLines=cart.map(c=>'• '+c.name+' x'+c.qty+' = ₹'+(c.price*c.qty).toFixed(0)).join('\n');
   const payCards=upis.map(u=>{
-    const detail=u.upi_id?u.upi_id:(u.mobile?'📱 '+u.mobile:'');
-    const qrBlock=u.qr_img?`<img src="${u.qr_img}" style="width:150px;height:150px;object-fit:contain;border-radius:8px;cursor:pointer;margin:8px 0" onclick="openLightbox('${u.qr_img}')" alt="QR"><div style="font-size:11px;color:#999">Tap QR to zoom & scan</div>`:'';
-    const waMsg=encodeURIComponent('Hi AnVi Collections! 🛍️\n\nMy order:\n'+itemLines+'\n\nTotal: ₹'+total.toFixed(0)+'\n\nPaying to: '+u.name+' ('+detail+')\n\nI will send the payment screenshot here once paid.');
+    const detail=u.upi_id?u.upi_id:(u.mobile?u.mobile:'');
+    const qrBlock=u.qr_img?`<img src="${u.qr_img}" style="width:150px;height:150px;object-fit:contain;border-radius:8px;cursor:pointer;margin:8px 0" onclick="openLightbox('${u.qr_img}')" alt="QR"><div style="font-size:11px;color:#999">Tap QR to zoom</div>`:'';
     return `<div style="text-align:center;border:2px solid #f0d0d8;border-radius:12px;padding:14px;flex:1;min-width:160px;background:#fff">
       <b style="display:block;margin-bottom:4px;color:#333;font-size:15px">${u.name}</b>
-      <div style="font-size:13px;color:#555;font-weight:600;margin:4px 0">${detail}</div>
       ${qrBlock}
-      <div style="font-size:14px;font-weight:700;color:var(--accent);margin:6px 0">Amount: ₹${total.toFixed(0)}</div>
-      <a href="https://wa.me/919790531188?text=${waMsg}" target="_blank"
-        style="display:block;margin-top:8px;padding:11px;background:#25D366;color:#fff;border-radius:8px;font-weight:700;font-size:13px;text-decoration:none">
-        📱 Order & Pay via WhatsApp
-      </a>
+      <div style="font-size:13px;color:#555;font-weight:600;margin:6px 0;word-break:break-all">${detail}</div>
+      <button onclick="copyUpiId('${detail}',this)" style="padding:8px 14px;background:var(--accent);color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer">📋 Copy UPI ID</button>
     </div>`;
   }).join('');
   upiBox.innerHTML=`<div style="margin-top:14px;background:#fff8f9;border:1px solid #f0d0d8;border-radius:10px;padding:16px">
-    <b style="display:block;margin-bottom:4px;color:#333">💳 Pay ₹${total.toFixed(0)}</b>
-    <p style="font-size:12px;color:#888;margin-bottom:12px">Pay using the UPI ID/number/QR shown below in your UPI app, then tap the WhatsApp button to send your order & confirm payment.</p>
+    <b style="display:block;margin-bottom:10px;color:#333">UPI Details</b>
     <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center">${payCards}</div>
   </div>`;
+}
+function copyUpiId(text,btn){
+  navigator.clipboard.writeText(text).then(()=>{
+    const orig=btn.textContent; btn.textContent='✅ Copied!';
+    setTimeout(()=>btn.textContent=orig,1500);
+  }).catch(()=>alert('UPI ID: '+text));
 }
 async function saveOrderAfterUPI(customerName,upiId,upiName,total,items){
   try{
